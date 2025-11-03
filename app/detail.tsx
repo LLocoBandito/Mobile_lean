@@ -1,7 +1,7 @@
 import * as Location from "expo-location";
 import { useRouter } from "expo-router";
 import { Accelerometer, Gyroscope } from "expo-sensors";
-import React, { useEffect, useState } from "react";
+import { useEffect, useState } from "react";
 import {
   ActivityIndicator,
   Dimensions,
@@ -92,7 +92,7 @@ export default function Detail() {
                 latitude: location.latitude,
                 longitude: location.longitude,
               }}
-              title="Lokasi Sekarang"
+              title="Lokasi Sekaran"
               description="Titik awal perjalanan"
             />
           </MapView>
