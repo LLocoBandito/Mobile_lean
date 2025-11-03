@@ -1,0 +1,141 @@
+import { Feather, MaterialCommunityIcons } from "@expo/vector-icons";
+import { useRouter } from "expo-router"; // ✅ tambahkan ini
+import React from "react";
+import {
+  Image,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TouchableOpacity,
+  View,
+} from "react-native";
+
+export default function ProfileScreen() {
+  const router = useRouter(); // ✅ instance router
+
+  const userData = {
+    name: "I Komang Gede Wirawan",
+    address: "Jl. Raya Denpasar No. 123, Bali",
+    bikeType: "Yamaha NMAX 155",
+    maxTilt: "47°",
+    bloodType: "O+",
+    emergencyPhone: "+62 812-3456-7890",
+    photo: "https://cdn-icons-png.flaticon.com/512/3135/3135715.png",
+  };
+
+  return (
+    <ScrollView contentContainerStyle={styles.container}>
+      <Text style={styles.header}>Profil Pengguna</Text>
+
+      <View style={styles.photoContainer}>
+        <Image source={{ uri: userData.photo }} style={styles.profilePhoto} />
+        <Text style={styles.userName}>{userData.name}</Text>
+      </View>
+
+      <View style={styles.card}>
+        <View style={styles.infoRow}>
+          <Feather name="map-pin" size={22} color="#60A5FA" />
+          <Text style={styles.label}>Alamat:</Text>
+          <Text style={styles.value}>{userData.address}</Text>
+        </View>
+
+        <View style={styles.infoRow}>
+          <MaterialCommunityIcons name="tire" size={22} color="#60A5FA" />
+          <Text style={styles.label}>Kemiringan Terjauh:</Text>
+          <Text style={styles.value}>{userData.maxTilt}</Text>
+        </View>
+
+        <View style={styles.infoRow}>
+          <MaterialCommunityIcons name="motorbike" size={22} color="#60A5FA" />
+          <Text style={styles.label}>Jenis Motor:</Text>
+          <Text style={styles.value}>{userData.bikeType}</Text>
+        </View>
+
+        <View style={styles.infoRow}>
+          <Feather name="droplet" size={22} color="#60A5FA" />
+          <Text style={styles.label}>Golongan Darah:</Text>
+          <Text style={styles.value}>{userData.bloodType}</Text>
+        </View>
+
+        <View style={styles.infoRow}>
+          <Feather name="phone-call" size={22} color="#60A5FA" />
+          <Text style={styles.label}>Nomor Darurat:</Text>
+          <Text style={styles.value}>{userData.emergencyPhone}</Text>
+        </View>
+      </View>
+
+      <TouchableOpacity
+        style={styles.button}
+        onPress={() => router.push("/editprofile")} // ✅ arahkan ke halaman baru
+      >
+        <Text style={styles.buttonText}>Edit Profil</Text>
+      </TouchableOpacity>
+    </ScrollView>
+  );
+}
+
+const styles = StyleSheet.create({
+  container: {
+    flexGrow: 1,
+    padding: 20,
+    backgroundColor: "#0F172A",
+  },
+  header: {
+    fontSize: 24,
+    fontWeight: "bold",
+    color: "#fff",
+    marginBottom: 10,
+    textAlign: "center",
+  },
+  photoContainer: {
+    alignItems: "center",
+    marginBottom: 20,
+  },
+  profilePhoto: {
+    width: 100,
+    height: 100,
+    borderRadius: 50,
+    borderWidth: 3,
+    borderColor: "#3B82F6",
+    marginBottom: 10,
+  },
+  userName: {
+    fontSize: 20,
+    fontWeight: "bold",
+    color: "#fff",
+  },
+  card: {
+    backgroundColor: "#1E293B",
+    borderRadius: 12,
+    padding: 20,
+    marginBottom: 30,
+  },
+  infoRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    marginBottom: 15,
+  },
+  label: {
+    color: "#CBD5E1",
+    fontSize: 16,
+    marginLeft: 10,
+    flex: 0.7,
+  },
+  value: {
+    color: "#fff",
+    fontSize: 16,
+    fontWeight: "600",
+    flex: 1,
+  },
+  button: {
+    backgroundColor: "#3B82F6",
+    paddingVertical: 14,
+    borderRadius: 10,
+    alignItems: "center",
+  },
+  buttonText: {
+    color: "#fff",
+    fontSize: 16,
+    fontWeight: "bold",
+  },
+});
