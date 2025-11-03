@@ -92,7 +92,7 @@ export default function Detail() {
                 latitude: location.latitude,
                 longitude: location.longitude,
               }}
-              title="Lokasi Sekarang Banget"
+              title="Lokasi Sekarang"
               description="Titik awal perjalanan"
             />
           </MapView>
