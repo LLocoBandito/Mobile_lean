@@ -36,7 +36,7 @@ const LoginScreen: FC = () => {
 
   return (
     <View style={styles.container}>
-      <Text style={styles.title}>Selamat Datang Kembali</Text>
+      <Text style={styles.title}>Selamat Datang lagi</Text>
 
       {errorMessage && (
         <View style={styles.errorContainer}>
