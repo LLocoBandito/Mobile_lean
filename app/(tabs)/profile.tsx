@@ -1,5 +1,5 @@
 import { Feather, MaterialCommunityIcons } from "@expo/vector-icons";
-import { useRouter } from "expo-router"; // ✅ tambahkan ini
+import { useRouter } from "expo-router";
 import React from "react";
 import {
   Image,
@@ -11,7 +11,7 @@ import {
 } from "react-native";
 
 export default function ProfileScreen() {
-  const router = useRouter(); // ✅ instance router
+  const router = useRouter();
 
   const userData = {
     name: "I Komang Gede Wirawan",
@@ -21,6 +21,13 @@ export default function ProfileScreen() {
     bloodType: "O+",
     emergencyPhone: "+62 812-3456-7890",
     photo: "https://cdn-icons-png.flaticon.com/512/3135/3135715.png",
+  };
+
+  // Fungsi logout
+  const handleLogout = () => {
+    // Jika nanti kamu pakai AsyncStorage untuk simpan session/login token:
+    // await AsyncStorage.removeItem("userToken");
+    router.replace("/login"); // arahkan ke halaman login dan hapus history
   };
 
   return (
@@ -64,11 +71,20 @@ export default function ProfileScreen() {
         </View>
       </View>
 
+      {/* Tombol Edit Profil */}
       <TouchableOpacity
-        style={styles.button}
-        onPress={() => router.push("/editprofile")} // ✅ arahkan ke halaman baru
+        style={[styles.button, { backgroundColor: "#3B82F6" }]}
+        onPress={() => router.push("/editprofile")}
       >
         <Text style={styles.buttonText}>Edit Profil</Text>
+      </TouchableOpacity>
+
+      {/* Tombol Logout */}
+      <TouchableOpacity
+        style={[styles.button, { backgroundColor: "#EF4444", marginTop: 10 }]}
+        onPress={handleLogout}
+      >
+        <Text style={styles.buttonText}>Logout</Text>
       </TouchableOpacity>
     </ScrollView>
   );
@@ -128,7 +144,6 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   button: {
-    backgroundColor: "#3B82F6",
     paddingVertical: 14,
     borderRadius: 10,
     alignItems: "center",
