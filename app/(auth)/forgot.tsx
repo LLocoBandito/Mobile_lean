@@ -1,11 +1,49 @@
 import { useRouter } from "expo-router";
-import React from "react";
-import { StyleSheet, Text, TouchableOpacity, View } from "react-native";
+import React, { useState } from "react";
+import { Alert, StyleSheet, Text, TouchableOpacity, View } from "react-native";
 import AuthButton from "../../components/buttonprimary";
 import AuthInput from "../../components/inputfield";
+import { handlePasswordReset } from "../../utils/login_handler";
 
 export default function ForgotPasswordScreen() {
   const router = useRouter();
+  const [email, setEmail] = useState("");
+  const [loading, setLoading] = useState(false);
+
+  const handleReset = async () => {
+    if (!email) {
+      Alert.alert("Error", "Masukkan alamat email Anda.");
+      return;
+    }
+
+    setLoading(true);
+
+    try {
+      await handlePasswordReset(email);
+
+      Alert.alert(
+        "Tautan Dikirim",
+        `Kami telah mengirimkan tautan reset password ke ${email}. Cek inbox Anda.`
+      );
+      // Kembali ke halaman login setelah berhasil
+      router.push("/(auth)/login");
+    } catch (error: any) {
+      let errorMessage =
+        "Gagal mengirim tautan reset. Pastikan email Anda benar dan terdaftar.";
+
+      if (error.code === "auth/user-not-found") {
+        // Penting: Jangan berikan detail spesifik user-not-found untuk alasan keamanan,
+        // tapi kita bisa memberikan pesan yang lebih jelas di sini.
+        errorMessage = "Email tidak ditemukan atau tidak terdaftar.";
+      } else if (error.message) {
+        errorMessage = error.message;
+      }
+
+      Alert.alert("Gagal", errorMessage);
+    } finally {
+      setLoading(false);
+    }
+  };
 
   return (
     <View style={styles.container}>
@@ -17,13 +55,15 @@ export default function ForgotPasswordScreen() {
 
       <AuthInput
         label="Email"
-        placeholder="Email (test@gmail.com)"
+        placeholder="Masukkan email terdaftar"
         keyboardType="email-address"
+        value={email}
+        onChangeText={setEmail}
       />
 
       <AuthButton
-        title="Kirim Tautan Reset"
-        onPress={() => alert("Tautan reset dikirim (UI Only)")}
+        title={loading ? "Mengirim..." : "Kirim Tautan Reset"}
+        onPress={loading ? () => {} : handleReset}
       />
 
       <TouchableOpacity onPress={() => router.push("/(auth)/login")}>
