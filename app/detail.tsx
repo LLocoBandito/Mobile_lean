@@ -1,202 +1,203 @@
-import * as Location from "expo-location";
-import { useRouter } from "expo-router";
-import { Accelerometer, Gyroscope } from "expo-sensors";
-import { useEffect, useState } from "react";
+import { useNavigation } from "@react-navigation/native";
+import { collection, getDocs, orderBy, query } from "firebase/firestore";
+import React, { useEffect, useState } from "react";
 import {
   ActivityIndicator,
-  Dimensions,
   ScrollView,
   StyleSheet,
   Text,
   TouchableOpacity,
   View,
 } from "react-native";
-import MapView, { Marker } from "react-native-maps";
+import MapView, { Marker, Polyline } from "react-native-maps";
+import { SafeAreaView } from "react-native-safe-area-context";
+import { db } from "./../utils/firebaseConfig";
 
 export default function Detail() {
-  const router = useRouter();
+  const [dataList, setDataList] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
-  const [tiltData, setTiltData] = useState({
-    left: 0,
-    right: 0,
-    gforce: 0,
-  });
-  const [location, setLocation] = useState<any>(null);
+  const navigation = useNavigation();
 
-  useEffect(() => {
-    let accelSub: any;
-    let gyroSub: any;
+  // 🔥 Ambil data dari Firestore
+  const fetchData = async () => {
+    try {
+      const q = query(
+        collection(db, "monitoringData"),
+        orderBy("timestamp", "desc")
+      );
+      const snapshot = await getDocs(q);
 
-    (async () => {
-      const { status } = await Location.requestForegroundPermissionsAsync();
-      if (status === "granted") {
-        const loc = await Location.getCurrentPositionAsync({});
-        setLocation(loc.coords);
-      }
-    })();
-
-    Accelerometer.setUpdateInterval(300);
-    Gyroscope.setUpdateInterval(300);
-
-    accelSub = Accelerometer.addListener(({ x, y, z }) => {
-      const gforce = Math.sqrt(x * x + y * y + z * z).toFixed(2);
-      setTiltData((prev) => ({ ...prev, gforce: parseFloat(gforce) }));
-    });
-
-    gyroSub = Gyroscope.addListener(({ x, y }) => {
-      const left = y < 0 ? parseFloat(Math.abs(y * 45).toFixed(2)) : 0;
-      const right = y > 0 ? parseFloat(Math.abs(y * 45).toFixed(2)) : 0;
-
-      setTiltData((prev) => ({
-        ...prev,
-        left,
-        right,
+      const data = snapshot.docs.map((doc) => ({
+        id: doc.id,
+        ...doc.data(),
       }));
-    });
 
-    setTimeout(() => setLoading(false), 1500);
-
-    return () => {
-      accelSub && accelSub.remove();
-      gyroSub && gyroSub.remove();
-    };
-  }, []);
-
-  const handleExit = () => {
-    router.push("/manage"); // ✅ arahkan ke halaman Manage
+      setDataList(data);
+    } catch (error) {
+      console.error("❌ Gagal mengambil data:", error);
+    } finally {
+      setLoading(false);
+    }
   };
 
+  useEffect(() => {
+    fetchData();
+  }, []);
+
+  if (loading) {
+    return (
+      <View style={styles.center}>
+        <ActivityIndicator size="large" color="#3B82F6" />
+        <Text style={{ color: "#9CA3AF", marginTop: 10 }}>Memuat data...</Text>
+      </View>
+    );
+  }
+
+  if (dataList.length === 0) {
+    return (
+      <View style={styles.center}>
+        <Text style={{ color: "#9CA3AF" }}>Belum ada data disimpan.</Text>
+        <TouchableOpacity
+          style={styles.exitButton}
+          onPress={() => navigation.goBack()}
+        >
+          <Text style={{ color: "#fff", fontWeight: "600" }}>Exit</Text>
+        </TouchableOpacity>
+      </View>
+    );
+  }
+
   return (
-    <ScrollView style={styles.container}>
-      <Text style={styles.header}>Detail Monitoring</Text>
+    <SafeAreaView style={styles.container}>
+      <ScrollView contentContainerStyle={{ paddingBottom: 70 }}>
+        <Text style={styles.header}>Riwayat Monitoring</Text>
 
-      {/* PETA GPS */}
-      <View style={styles.mapContainer}>
-        {loading || !location ? (
-          <View style={styles.mapPlaceholder}>
-            <ActivityIndicator size="large" color="#2563EB" />
-            <Text style={styles.mapLoadingText}>Memuat peta...</Text>
+        {dataList.map((item, index) => (
+          <View key={item.id} style={styles.card}>
+            <Text style={styles.title}>📍 Data #{index + 1}</Text>
+            <Text style={styles.text}>Status: {item.status}</Text>
+            <Text style={styles.text}>
+              Pitch: {item.pitch}° | Roll: {item.roll}°
+            </Text>
+            <Text style={styles.text}>
+              Arah Miring:{" "}
+              <Text
+                style={{
+                  color:
+                    item.tiltDirection === "Kanan"
+                      ? "#10B981"
+                      : item.tiltDirection === "Kiri"
+                      ? "#EF4444"
+                      : "#9CA3AF",
+                  fontWeight: "600",
+                }}
+              >
+                {item.tiltDirection}
+              </Text>
+            </Text>
+            <Text style={styles.text}>Total Titik: {item.totalPoints}</Text>
+            <Text style={styles.text}>
+              Waktu: {new Date(item.timestamp).toLocaleString()}
+            </Text>
+
+            {/* Peta rute */}
+            {item.path && item.path.length > 0 && (
+              <View style={styles.mapContainer}>
+                <MapView
+                  style={{ flex: 1 }}
+                  initialRegion={{
+                    latitude: item.startPoint?.latitude || -8.65,
+                    longitude: item.startPoint?.longitude || 115.22,
+                    latitudeDelta: 0.01,
+                    longitudeDelta: 0.01,
+                  }}
+                >
+                  <Polyline
+                    coordinates={item.path}
+                    strokeWidth={4}
+                    strokeColor="#3B82F6"
+                  />
+                  <Marker
+                    coordinate={item.startPoint}
+                    title="Start"
+                    pinColor="green"
+                  />
+                  <Marker
+                    coordinate={item.endPoint}
+                    title="End"
+                    pinColor="red"
+                  />
+                </MapView>
+              </View>
+            )}
           </View>
-        ) : (
-          <MapView
-            style={styles.map}
-            initialRegion={{
-              latitude: location.latitude,
-              longitude: location.longitude,
-              latitudeDelta: 0.01,
-              longitudeDelta: 0.01,
-            }}
-          >
-            <Marker
-              coordinate={{
-                latitude: location.latitude,
-                longitude: location.longitude,
-              }}
-              title="Lokasi Sekarang"
-              description="Titik awal perjalanan"
-            />
-          </MapView>
-        )}
-      </View>
+        ))}
 
-      {/* DATA SENSOR */}
-      <View style={styles.dataContainer}>
-        <Text style={styles.sectionTitle}>📊 Data Sensor</Text>
-
-        <View style={styles.dataRow}>
-          <Text style={styles.dataLabel}>Kemiringan Kiri:</Text>
-          <Text style={styles.dataValue}>{tiltData.left}°</Text>
-        </View>
-
-        <View style={styles.dataRow}>
-          <Text style={styles.dataLabel}>Kemiringan Kanan:</Text>
-          <Text style={styles.dataValue}>{tiltData.right}°</Text>
-        </View>
-
-        <View style={styles.dataRow}>
-          <Text style={styles.dataLabel}>G-Force Akselerasi:</Text>
-          <Text style={styles.dataValue}>{tiltData.gforce} g</Text>
-        </View>
-      </View>
-
-      {/* TOMBOL KELUAR */}
-      <TouchableOpacity style={styles.exitButton} onPress={handleExit}>
-        <Text style={styles.exitButtonText}>Keluar</Text>
-      </TouchableOpacity>
-    </ScrollView>
+        {/* Tombol Exit */}
+        <TouchableOpacity
+          style={styles.exitButton}
+          onPress={() => navigation.goBack()}
+        >
+          <Text style={{ color: "#fff", fontWeight: "600" }}>Exit</Text>
+        </TouchableOpacity>
+      </ScrollView>
+    </SafeAreaView>
   );
 }
 
-const { width } = Dimensions.get("window");
-
+// --- Styles ---
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: "#F9FAFB",
+    backgroundColor: "#0F172A",
     padding: 20,
   },
   header: {
     fontSize: 22,
     fontWeight: "700",
-    color: "#111827",
+    color: "#F9FAFB",
     marginBottom: 15,
+    textAlign: "center",
+  },
+  card: {
+    backgroundColor: "#1E293B",
+    borderRadius: 12,
+    padding: 15,
+    marginBottom: 20,
+    shadowColor: "#000",
+    shadowOpacity: 0.2,
+    shadowRadius: 4,
+    elevation: 3,
+  },
+  title: {
+    color: "#F3F4F6",
+    fontSize: 18,
+    fontWeight: "600",
+    marginBottom: 6,
+  },
+  text: {
+    color: "#9CA3AF",
+    fontSize: 14,
+    marginBottom: 3,
   },
   mapContainer: {
-    height: 300,
-    borderRadius: 16,
+    height: 200,
+    borderRadius: 10,
     overflow: "hidden",
-    marginBottom: 20,
-    backgroundColor: "#E5E7EB",
+    marginTop: 10,
   },
-  map: {
-    flex: 1,
-    width: width - 40,
-    height: 300,
-  },
-  mapPlaceholder: {
+  center: {
     flex: 1,
     justifyContent: "center",
     alignItems: "center",
-  },
-  mapLoadingText: {
-    color: "#6B7280",
-    marginTop: 8,
-  },
-  dataContainer: {
-    backgroundColor: "#fff",
-    borderRadius: 14,
-    padding: 15,
-    elevation: 2,
-  },
-  sectionTitle: {
-    fontSize: 18,
-    fontWeight: "700",
-    color: "#111827",
-    marginBottom: 10,
-  },
-  dataRow: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    paddingVertical: 6,
-  },
-  dataLabel: {
-    color: "#6B7280",
-    fontWeight: "500",
-  },
-  dataValue: {
-    fontWeight: "700",
-    color: "#111827",
+    backgroundColor: "#0F172A",
   },
   exitButton: {
-    backgroundColor: "#3B82F6",
-    paddingVertical: 14,
+    backgroundColor: "#EF4444",
     borderRadius: 10,
-    alignItems: "center",
-    marginTop: 25,
-  },
-  exitButtonText: {
-    color: "#fff",
-    fontSize: 16,
-    fontWeight: "bold",
+    paddingVertical: 12,
+    paddingHorizontal: 20,
+    alignSelf: "center",
+    marginTop: 20,
   },
 });
