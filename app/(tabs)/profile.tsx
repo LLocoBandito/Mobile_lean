@@ -1,6 +1,7 @@
 import { Feather, MaterialCommunityIcons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
-import React from "react";
+import { doc, getDoc } from "firebase/firestore";
+import React, { useEffect, useState } from "react";
 import {
   Image,
   ScrollView,
@@ -9,33 +10,56 @@ import {
   TouchableOpacity,
   View,
 } from "react-native";
+import { db } from "../../utils/firebaseConfig";
 
 export default function ProfileScreen() {
   const router = useRouter();
 
-  const userData = {
-    name: "I Komang Gede Wirawan",
-    address: "Jl. Raya Denpasar No. 123, Bali",
-    bikeType: "Yamaha NMAX 155",
-    maxTilt: "47°",
-    bloodType: "O+",
-    emergencyPhone: "+62 812-3456-7890",
-    photo: "https://cdn-icons-png.flaticon.com/512/3135/3135715.png",
+  const [userData, setUserData] = useState<any>(null);
+
+  useEffect(() => {
+    const fetchUser = async () => {
+      try {
+        const docRef = doc(db, "users", "user_1");
+        const snapshot = await getDoc(docRef);
+        if (snapshot.exists()) {
+          setUserData(snapshot.data());
+        }
+      } catch (error) {
+        console.error("Gagal memuat data profil:", error);
+      }
+    };
+
+    fetchUser();
+  }, []);
+
+  const handleLogout = () => {
+    router.replace("/login");
   };
 
-  // Fungsi logout
-  const handleLogout = () => {
-    // Jika nanti kamu pakai AsyncStorage untuk simpan session/login token:
-    // await AsyncStorage.removeItem("userToken");
-    router.replace("/login"); // arahkan ke halaman login dan hapus history
-  };
+  if (!userData) {
+    return (
+      <View style={[styles.container, { justifyContent: "center" }]}>
+        <Text style={{ color: "#9CA3AF", textAlign: "center" }}>
+          Memuat profil...
+        </Text>
+      </View>
+    );
+  }
 
   return (
     <ScrollView contentContainerStyle={styles.container}>
       <Text style={styles.header}>Profil Pengguna</Text>
 
       <View style={styles.photoContainer}>
-        <Image source={{ uri: userData.photo }} style={styles.profilePhoto} />
+        <Image
+          source={{
+            uri:
+              userData.photo ||
+              "https://cdn-icons-png.flaticon.com/512/3135/3135715.png",
+          }}
+          style={styles.profilePhoto}
+        />
         <Text style={styles.userName}>{userData.name}</Text>
       </View>
 
@@ -44,12 +68,6 @@ export default function ProfileScreen() {
           <Feather name="map-pin" size={22} color="#60A5FA" />
           <Text style={styles.label}>Alamat:</Text>
           <Text style={styles.value}>{userData.address}</Text>
-        </View>
-
-        <View style={styles.infoRow}>
-          <MaterialCommunityIcons name="tire" size={22} color="#60A5FA" />
-          <Text style={styles.label}>Kemiringan Terjauh:</Text>
-          <Text style={styles.value}>{userData.maxTilt}</Text>
         </View>
 
         <View style={styles.infoRow}>
@@ -71,7 +89,6 @@ export default function ProfileScreen() {
         </View>
       </View>
 
-      {/* Tombol Edit Profil */}
       <TouchableOpacity
         style={[styles.button, { backgroundColor: "#3B82F6" }]}
         onPress={() => router.push("/editprofile")}
@@ -79,7 +96,6 @@ export default function ProfileScreen() {
         <Text style={styles.buttonText}>Edit Profil</Text>
       </TouchableOpacity>
 
-      {/* Tombol Logout */}
       <TouchableOpacity
         style={[styles.button, { backgroundColor: "#EF4444", marginTop: 10 }]}
         onPress={handleLogout}

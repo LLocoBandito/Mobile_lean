@@ -1,5 +1,6 @@
 import { useRouter } from "expo-router";
-import React, { useState } from "react";
+import { doc, getDoc, setDoc } from "firebase/firestore";
+import React, { useEffect, useState } from "react";
 import {
   Alert,
   ScrollView,
@@ -9,26 +10,52 @@ import {
   TouchableOpacity,
   View,
 } from "react-native";
+import { db } from "../utils/firebaseConfig";
 
 export default function EditProfileScreen() {
   const router = useRouter();
 
-  // Data dummy untuk awal
   const [formData, setFormData] = useState({
-    name: "I Komang Gede Wirawan",
-    address: "Jl. Raya Denpasar No. 123, Bali",
-    bikeType: "Yamaha NMAX 155",
-    bloodType: "O+",
-    emergencyPhone: "+62 812-3456-7890",
+    name: "",
+    address: "",
+    bikeType: "",
+    bloodType: "",
+    emergencyPhone: "",
   });
+
+  // 🔹 Ambil data user dari Firestore saat halaman dibuka
+  useEffect(() => {
+    const fetchProfile = async () => {
+      try {
+        const docRef = doc(db, "users", "user_1"); // ID user statis
+        const snapshot = await getDoc(docRef);
+
+        if (snapshot.exists()) {
+          setFormData(snapshot.data() as typeof formData);
+        } else {
+          console.log("Data profil belum ada di Firestore.");
+        }
+      } catch (error) {
+        console.error("Gagal memuat profil:", error);
+      }
+    };
+
+    fetchProfile();
+  }, []);
 
   const handleChange = (field: string, value: string) => {
     setFormData({ ...formData, [field]: value });
   };
 
-  const handleSave = () => {
-    Alert.alert("Berhasil!", "Profil kamu berhasil diperbarui 🎉");
-    router.back(); // kembali ke halaman profil
+  const handleSave = async () => {
+    try {
+      await setDoc(doc(db, "users", "user_1"), formData, { merge: true });
+      Alert.alert("Berhasil!", "Profil kamu berhasil diperbarui 🎉");
+      router.back();
+    } catch (error) {
+      console.error("Gagal menyimpan:", error);
+      Alert.alert("Error", "Gagal menyimpan profil ke database.");
+    }
   };
 
   const handleCancel = () => {
@@ -121,7 +148,7 @@ const styles = StyleSheet.create({
     fontWeight: "bold",
   },
   cancelButton: {
-    backgroundColor: "#475569", // abu-abu tua
+    backgroundColor: "#475569",
     paddingVertical: 14,
     borderRadius: 10,
     alignItems: "center",
