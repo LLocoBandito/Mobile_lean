@@ -1,4 +1,5 @@
 import { useRouter } from "expo-router";
+import { getAuth } from "firebase/auth";
 import { doc, getDoc, setDoc } from "firebase/firestore";
 import React, { useEffect, useState } from "react";
 import {
@@ -14,6 +15,9 @@ import { db } from "../utils/firebaseConfig";
 
 export default function EditProfileScreen() {
   const router = useRouter();
+  const auth = getAuth();
+  const user = auth.currentUser;
+  const userId = user?.uid || "user_1";
 
   const [formData, setFormData] = useState({
     name: "",
@@ -27,9 +31,8 @@ export default function EditProfileScreen() {
   useEffect(() => {
     const fetchProfile = async () => {
       try {
-        const docRef = doc(db, "users", "user_1"); // ID user statis
+        const docRef = doc(db, "users", userId);
         const snapshot = await getDoc(docRef);
-
         if (snapshot.exists()) {
           setFormData(snapshot.data() as typeof formData);
         } else {
@@ -49,9 +52,9 @@ export default function EditProfileScreen() {
 
   const handleSave = async () => {
     try {
-      await setDoc(doc(db, "users", "user_1"), formData, { merge: true });
+      await setDoc(doc(db, "users", userId), formData, { merge: true });
       Alert.alert("Berhasil!", "Profil kamu berhasil diperbarui 🎉");
-      router.back();
+      router.replace("/(tabs)/profile"); // kembali ke halaman profil
     } catch (error) {
       console.error("Gagal menyimpan:", error);
       Alert.alert("Error", "Gagal menyimpan profil ke database.");
