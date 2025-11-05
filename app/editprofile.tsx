@@ -27,7 +27,7 @@ export default function EditProfileScreen() {
     emergencyPhone: "",
   });
 
-  // 🔹 Ambil data user dari Firestore saat halaman dibuka
+  // 🔹 Fetch user data from Firestore when the page is opened
   useEffect(() => {
     const fetchProfile = async () => {
       try {
@@ -36,10 +36,10 @@ export default function EditProfileScreen() {
         if (snapshot.exists()) {
           setFormData(snapshot.data() as typeof formData);
         } else {
-          console.log("Data profil belum ada di Firestore.");
+          console.log("Profile data does not exist in Firestore yet.");
         }
       } catch (error) {
-        console.error("Gagal memuat profil:", error);
+        console.error("Failed to load profile:", error);
       }
     };
 
@@ -53,58 +53,64 @@ export default function EditProfileScreen() {
   const handleSave = async () => {
     try {
       await setDoc(doc(db, "users", userId), formData, { merge: true });
-      Alert.alert("Berhasil!", "Profil kamu berhasil diperbarui 🎉");
-      router.replace("/(tabs)/profile"); // kembali ke halaman profil
+      Alert.alert("Success!", "Your profile has been updated successfully 🎉");
+      router.replace("/(tabs)/profile"); // go back to the profile page
     } catch (error) {
-      console.error("Gagal menyimpan:", error);
-      Alert.alert("Error", "Gagal menyimpan profil ke database.");
+      console.error("Failed to save:", error);
+      Alert.alert("Error", "Failed to save profile to the database.");
     }
   };
 
   const handleCancel = () => {
-    Alert.alert(
-      "Batalkan Perubahan?",
-      "Semua perubahan yang belum disimpan akan hilang.",
-      [
-        { text: "Tidak", style: "cancel" },
-        { text: "Ya", onPress: () => router.back(), style: "destructive" },
-      ]
-    );
+    Alert.alert("Discard Changes?", "All unsaved changes will be lost.", [
+      { text: "No", style: "cancel" },
+      { text: "Yes", onPress: () => router.back(), style: "destructive" },
+    ]);
+  };
+
+  // Helper function for translating keys
+  const getLabel = (key: string) => {
+    switch (key) {
+      case "name":
+        return "Name";
+      case "address":
+        return "Address";
+      case "bikeType":
+        return "Bike Type";
+      case "bloodType":
+        return "Blood Type";
+      case "emergencyPhone":
+        return "Emergency Number";
+      default:
+        return key;
+    }
   };
 
   return (
     <ScrollView contentContainerStyle={styles.container}>
-      <Text style={styles.header}>Edit Profil</Text>
+      <Text style={styles.header}>Edit Profile</Text>
 
       {Object.keys(formData).map((key) => (
         <View key={key} style={styles.inputGroup}>
-          <Text style={styles.label}>
-            {key === "name"
-              ? "Nama"
-              : key === "address"
-              ? "Alamat"
-              : key === "bikeType"
-              ? "Jenis Motor"
-              : key === "bloodType"
-              ? "Golongan Darah"
-              : "Nomor Darurat"}
-          </Text>
+          <Text style={styles.label}>{getLabel(key)}</Text>
           <TextInput
             style={styles.input}
             value={formData[key as keyof typeof formData]}
             onChangeText={(text) => handleChange(key, text)}
-            placeholder={`Masukkan ${key}`}
+            placeholder={`Enter ${getLabel(key).toLowerCase()}`}
             placeholderTextColor="#94A3B8"
+            // Special keyboard for emergency phone
+            keyboardType={key === "emergencyPhone" ? "phone-pad" : "default"}
           />
         </View>
       ))}
 
       <TouchableOpacity style={styles.saveButton} onPress={handleSave}>
-        <Text style={styles.saveButtonText}>Simpan Perubahan</Text>
+        <Text style={styles.saveButtonText}>Save Changes</Text>
       </TouchableOpacity>
 
       <TouchableOpacity style={styles.cancelButton} onPress={handleCancel}>
-        <Text style={styles.cancelButtonText}>Batalkan</Text>
+        <Text style={styles.cancelButtonText}>Cancel</Text>
       </TouchableOpacity>
     </ScrollView>
   );

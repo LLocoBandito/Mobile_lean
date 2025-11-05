@@ -10,13 +10,14 @@ import {
   View,
 } from "react-native";
 import MapView, { Marker, Polyline } from "react-native-maps";
-import { db } from "../../utils/firebaseConfig"; // pastikan path ini sesuai
+import { db } from "../../utils/firebaseConfig"; // ensure this path is correct
 
 type SessionData = {
   id: string;
   sessionName: string;
-  avgRoll: string;
-  avgPitch: string;
+  // Ensure data types match what is stored in Firestore (e.g., number or string)
+  avgRoll: number;
+  avgPitch: number;
   totalPoints: number;
   path: {
     latitude: number;
@@ -25,22 +26,43 @@ type SessionData = {
     pitch?: number;
     timestamp: string;
   }[];
-  createdAt: string;
+  // Retrieving timestamp from startPoint
+  startPoint: { timestamp: string };
 };
 
 export default function DetailByIdScreen() {
-  const { id } = useLocalSearchParams();
+  // Ensure the 'id' parameter is retrieved as a string
+  const { id } = useLocalSearchParams<{ id: string }>();
   const [session, setSession] = useState<SessionData | null>(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     const fetchSession = async () => {
-      if (!id) return;
+      if (!id) {
+        setLoading(false);
+        return;
+      }
       try {
-        const docRef = doc(db, "sessions", id as string);
+        // --- IMPORTANT FIX HERE ---
+        // Change 'sessions' to 'monitoring_sessions'
+        const docRef = doc(db, "monitoring_sessions", id);
+        // --------------------------
+
         const docSnap = await getDoc(docRef);
+
         if (docSnap.exists()) {
-          setSession({ id: docSnap.id, ...docSnap.data() } as SessionData);
+          const data = docSnap.data();
+          setSession({
+            id: docSnap.id,
+            sessionName: data.sessionName || "Untitled Session",
+            avgRoll: parseFloat(data.avgRoll) || 0, // Ensure numeric format
+            avgPitch: parseFloat(data.avgPitch) || 0, // Ensure numeric format
+            totalPoints: data.totalLocationPoints || data.totalPoints || 0, // Flexible retrieval
+            path: data.path || [],
+            startPoint: data.startPoint,
+          } as SessionData);
+        } else {
+          console.warn(`Document with ID: ${id} not found.`);
         }
       } catch (error) {
         console.error("Error fetching session:", error);
@@ -55,20 +77,32 @@ export default function DetailByIdScreen() {
     return (
       <View style={styles.center}>
         <ActivityIndicator size="large" color="#3B82F6" />
-        <Text style={{ color: "#E5E7EB", marginTop: 10 }}>Memuat data...</Text>
+        <Text style={{ color: "#9CA3AF", marginTop: 10 }}>Loading data...</Text>
       </View>
     );
   }
 
-  if (!session) {
+  if (!session || session.path.length === 0) {
     return (
       <View style={styles.center}>
-        <Text style={{ color: "#E5E7EB" }}>Data sesi tidak ditemukan.</Text>
+        <Text style={{ color: "#E5E7EB" }}>
+          Session data not found or contains no location data.
+        </Text>
       </View>
     );
   }
 
   const { path } = session;
+  const createdAtTimestamp =
+    session.startPoint?.timestamp || new Date().toISOString();
+
+  // Calculate map region
+  const initialRegion = {
+    latitude: path[0]?.latitude || -8.65,
+    longitude: path[0]?.longitude || 115.22,
+    latitudeDelta: 0.01,
+    longitudeDelta: 0.01,
+  };
 
   return (
     <ScrollView style={styles.container}>
@@ -78,12 +112,9 @@ export default function DetailByIdScreen() {
       <View style={styles.mapContainer}>
         <MapView
           style={{ flex: 1 }}
-          initialRegion={{
-            latitude: path[0]?.latitude || -8.65,
-            longitude: path[0]?.longitude || 115.22,
-            latitudeDelta: 0.01,
-            longitudeDelta: 0.01,
-          }}
+          initialRegion={initialRegion}
+          // Optional: Center map to fit all path coordinates
+          // onLayout={() => mapRef.current?.fitToCoordinates(path, { edgePadding: { top: 50, right: 50, bottom: 50, left: 50 }, animated: false })}
         >
           <Polyline coordinates={path} strokeWidth={4} strokeColor="#3B82F6" />
           {path.length > 0 && (
@@ -101,36 +132,36 @@ export default function DetailByIdScreen() {
 
       {/* Summary */}
       <View style={styles.summaryCard}>
-        <Text style={styles.summaryTitle}>Ringkasan Sesi</Text>
+        <Text style={styles.summaryTitle}>Session Summary</Text>
         <View style={styles.summaryRow}>
           <Ionicons name="speedometer-outline" size={18} color="#10B981" />
           <Text style={styles.summaryText}>
-            Total Titik: {session.totalPoints}
+            Total Points: {session.totalPoints}
           </Text>
         </View>
         <View style={styles.summaryRow}>
           <Ionicons name="swap-horizontal-outline" size={18} color="#3B82F6" />
           <Text style={styles.summaryText}>
-            Rata-rata Roll: {session.avgRoll}°
+            Average Roll: {session.avgRoll.toFixed(2)}°
           </Text>
         </View>
         <View style={styles.summaryRow}>
           <Ionicons name="stats-chart-outline" size={18} color="#FBBF24" />
           <Text style={styles.summaryText}>
-            Rata-rata Pitch: {session.avgPitch}°
+            Average Pitch: {session.avgPitch.toFixed(2)}°
           </Text>
         </View>
         <View style={styles.summaryRow}>
           <Ionicons name="calendar-outline" size={18} color="#9CA3AF" />
           <Text style={styles.summaryText}>
-            Dibuat: {new Date(session.createdAt).toLocaleString()}
+            Start Time: {new Date(createdAtTimestamp).toLocaleString()}
           </Text>
         </View>
       </View>
 
       {/* Data Table */}
       <View style={styles.tableContainer}>
-        <Text style={styles.tableTitle}>Data Kemiringan per Titik GPS</Text>
+        <Text style={styles.tableTitle}>Tilt Data per GPS Point</Text>
         {path.map((p, i) => (
           <View key={i} style={styles.tableRow}>
             <Text style={styles.tableIndex}>{i + 1}</Text>
@@ -139,7 +170,8 @@ export default function DetailByIdScreen() {
                 Lat: {p.latitude.toFixed(5)}, Lng: {p.longitude.toFixed(5)}
               </Text>
               <Text style={styles.tableSubText}>
-                Roll: {p.roll ?? 0}°, Pitch: {p.pitch ?? 0}°
+                Roll: {(p.roll ?? 0).toFixed(2)}°, Pitch:{" "}
+                {(p.pitch ?? 0).toFixed(2)}°
               </Text>
             </View>
             <Text style={styles.timeText}>

@@ -18,7 +18,7 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import Svg, { Path } from "react-native-svg";
 import { db } from "../../utils/firebaseConfig";
 
-// Struktur data
+// Data structure
 interface LocationPoint {
   latitude: number;
   longitude: number;
@@ -44,14 +44,14 @@ export default function Home() {
 
   const buttonSize = Dimensions.get("window").width / 2.4;
 
-  // ------------------ Aktivasi Sensor & Lokasi ------------------
+  // ------------------ Activate Sensor & Location ------------------
   const activateMonitoring = async () => {
     const { status: locStatus } =
       await Location.requestForegroundPermissionsAsync();
     if (locStatus !== "granted") {
       Alert.alert(
-        "Izin Diperlukan",
-        "Izin lokasi diperlukan untuk melacak posisi!"
+        "Permission Required",
+        "Location permission is required to track position!"
       );
       return;
     }
@@ -91,7 +91,7 @@ export default function Home() {
     setSubscription(sub as { remove: () => void });
   };
 
-  // ------------------ Tombol Start ------------------
+  // ------------------ Start Button ------------------
   const startMonitoring = async () => {
     if (subscription) subscription.remove();
     if (locationWatcher) locationWatcher.remove();
@@ -102,7 +102,7 @@ export default function Home() {
     setPaused(false);
   };
 
-  // ------------------ Tombol Stop ------------------
+  // ------------------ Stop Button ------------------
   const stopMonitoring = () => {
     if (subscription) subscription.remove();
     if (locationWatcher) locationWatcher.remove();
@@ -118,7 +118,7 @@ export default function Home() {
     }).start();
   };
 
-  // ------------------ Tombol Pause / Continue ------------------
+  // ------------------ Pause / Continue Button ------------------
   const togglePause = async () => {
     if (paused) {
       await activateMonitoring();
@@ -134,10 +134,10 @@ export default function Home() {
     }
   };
 
-  // ------------------ Simpan ke Firebase ------------------
+  // ------------------ Save to Firebase ------------------
   const saveData = async () => {
     if (locationPoints.length === 0) {
-      Alert.alert("Perhatian", "Belum ada data lokasi/sensor untuk disimpan!");
+      Alert.alert("Attention", "No location/sensor data to save yet!");
       return;
     }
 
@@ -165,12 +165,12 @@ export default function Home() {
       };
 
       const docRef = await addDoc(collection(db, "monitoring_sessions"), data);
-      console.log("✅ Data tersimpan dengan ID:", docRef.id);
-      Alert.alert("Sukses", "Data berhasil disimpan ke Firebase!");
+      console.log("✅ Data saved with ID:", docRef.id);
+      Alert.alert("Success", "Data successfully saved to Firebase!");
       setLocationPoints([]);
     } catch (error) {
-      console.error("❌ Gagal simpan:", error);
-      Alert.alert("Gagal", "Tidak bisa menyimpan data ke Firebase!");
+      console.error("❌ Failed to save:", error);
+      Alert.alert("Failed", "Could not save data to Firebase!");
     }
   };
 
@@ -228,7 +228,7 @@ export default function Home() {
           </View>
         </View>
 
-        {/* Visualisasi */}
+        {/* Visualization */}
         <View style={styles.visualContainer}>
           <Svg height="200" width="300">
             <Path
@@ -302,7 +302,7 @@ export default function Home() {
           </MapView>
         </View>
 
-        {/* Tombol kontrol */}
+        {/* Control Buttons */}
         <View style={styles.controlButtons}>
           <TouchableOpacity
             style={[

@@ -28,12 +28,12 @@ const LoginScreen: FC = () => {
         email,
         password
       );
-      console.log("Login sukses:", userCredential.user.email);
+      console.log("Login successful:", userCredential.user.email);
 
       // Redirect ke tab utama
       router.replace("/(tabs)");
     } catch (error: any) {
-      console.log("Login gagal:", error.message);
+      console.log("Login failed:", error.message);
       setErrorMessage(error.message);
     } finally {
       setLoading(false);
@@ -42,7 +42,7 @@ const LoginScreen: FC = () => {
 
   return (
     <View style={styles.container}>
-      <Text style={styles.title}>Selamat Datang Kembali</Text>
+      <Text style={styles.title}>Welcome Back</Text>
 
       {errorMessage && (
         <View style={styles.errorContainer}>
@@ -82,11 +82,11 @@ const LoginScreen: FC = () => {
       </TouchableOpacity>
 
       <TouchableOpacity onPress={() => router.push("/(auth)/forgot" as Href)}>
-        <Text style={styles.linkText}>Lupa Password?</Text>
+        <Text style={styles.linkText}>Forgot Password?</Text>
       </TouchableOpacity>
 
       <TouchableOpacity onPress={() => router.push("/(auth)/register" as Href)}>
-        <Text style={styles.linkText}>Belum punya akun? Daftar</Text>
+        <Text style={styles.linkText}>Don't have an account? Register</Text>
       </TouchableOpacity>
     </View>
   );

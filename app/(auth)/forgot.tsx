@@ -12,7 +12,7 @@ export default function ForgotPasswordScreen() {
 
   const handleReset = async () => {
     if (!email) {
-      Alert.alert("Error", "Masukkan alamat email Anda.");
+      Alert.alert("Error", "Enter your email address.");
       return;
     }
 
@@ -22,19 +22,19 @@ export default function ForgotPasswordScreen() {
       await handlePasswordReset(email);
 
       Alert.alert(
-        "Tautan Dikirim",
-        `Kami telah mengirimkan tautan reset password ke ${email}. Cek inbox Anda.`
+        "Link Sent",
+        `We have sent a password reset link to ${email}. Check your inbox.`
       );
       // Kembali ke halaman login setelah berhasil
       router.push("/(auth)/login");
     } catch (error: any) {
       let errorMessage =
-        "Gagal mengirim tautan reset. Pastikan email Anda benar dan terdaftar.";
+        "Failed to send reset link. Please ensure your email is correct and registered.";
 
       if (error.code === "auth/user-not-found") {
         // Penting: Jangan berikan detail spesifik user-not-found untuk alasan keamanan,
         // tapi kita bisa memberikan pesan yang lebih jelas di sini.
-        errorMessage = "Email tidak ditemukan atau tidak terdaftar.";
+        errorMessage = "Email not found or not registered.";
       } else if (error.message) {
         errorMessage = error.message;
       }
@@ -50,19 +50,19 @@ export default function ForgotPasswordScreen() {
       <Text style={styles.title}>Lupa Password </Text>
 
       <Text style={styles.subtitle}>
-        Masukkan email Anda untuk menerima tautan reset password.
+        Enter your email to receive a password reset link
       </Text>
 
       <AuthInput
         label="Email"
-        placeholder="Masukkan email terdaftar"
+        placeholder="Input Email"
         keyboardType="email-address"
         value={email}
         onChangeText={setEmail}
       />
 
       <AuthButton
-        title={loading ? "Mengirim..." : "Kirim Tautan Reset"}
+        title={loading ? "Loading..." : "Send Reset Code"}
         onPress={loading ? () => {} : handleReset}
       />
 

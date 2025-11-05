@@ -9,6 +9,7 @@ import {
 } from "firebase/firestore";
 import React, { useCallback, useEffect, useState } from "react";
 import {
+  ActivityIndicator,
   Alert,
   FlatList,
   Modal,
@@ -18,7 +19,7 @@ import {
   TouchableOpacity,
   View,
 } from "react-native";
-import { db } from "../../utils/firebaseConfig";
+import { db } from "../../utils/firebaseConfig"; // Ensure the path to firebaseConfig is correct
 
 interface MonitoringSession {
   id: string;
@@ -46,7 +47,7 @@ export default function Manage() {
   const [selectedSession, setSelectedSession] =
     useState<MonitoringSession | null>(null);
 
-  // 🔹 Ambil data dari Firestore
+  // 🔹 Fetch data from Firestore
   const fetchData = useCallback(async () => {
     try {
       setLoading(true);
@@ -58,15 +59,17 @@ export default function Manage() {
         const data = document.data();
         firebaseData.push({
           id: document.id,
-          sessionName: data.sessionName || "Sesi Tanpa Nama",
+          sessionName: data.sessionName || "Untitled Session",
           startPoint: data.startPoint,
-          totalLocationPoints: data.totalLocationPoints || 0,
+          // Retrieving totalPoints from the Firestore document (created in Home.tsx)
+          totalLocationPoints: data.totalPoints || 0,
           path: data.path || [],
           avgRoll: data.avgRoll || 0,
           avgPitch: data.avgPitch || 0,
           ...data,
         });
       });
+      // Sort by latest start time
       firebaseData.sort(
         (a, b) =>
           new Date(b.startPoint?.timestamp || 0).getTime() -
@@ -75,7 +78,7 @@ export default function Manage() {
       setDataList(firebaseData);
     } catch (error) {
       console.error("Error getting documents: ", error);
-      Alert.alert("Error", "Gagal memuat data dari database.");
+      Alert.alert("Error", "Failed to load data from the database.");
     } finally {
       setLoading(false);
     }
@@ -85,24 +88,24 @@ export default function Manage() {
     fetchData();
   }, [fetchData]);
 
-  // 🔹 Hapus sesi
+  // 🔹 Delete session
   const handleDelete = (id: string) => {
     Alert.alert(
-      "Konfirmasi Hapus",
-      "Apakah Anda yakin ingin menghapus sesi ini?",
+      "Confirm Deletion",
+      "Are you sure you want to delete this session?",
       [
-        { text: "Batal", style: "cancel" },
+        { text: "Cancel", style: "cancel" },
         {
-          text: "Hapus",
+          text: "Delete",
           style: "destructive",
           onPress: async () => {
             try {
               await deleteDoc(doc(db, "monitoring_sessions", id));
               setDataList((prev) => prev.filter((item) => item.id !== id));
-              Alert.alert("Sukses", "Sesi berhasil dihapus!");
+              Alert.alert("Success", "Session successfully deleted!");
             } catch (error) {
               console.error("Error deleting document: ", error);
-              Alert.alert("Error", "Gagal menghapus sesi.");
+              Alert.alert("Error", "Failed to delete session.");
             }
           },
         },
@@ -110,10 +113,10 @@ export default function Manage() {
     );
   };
 
-  // 🔹 Simpan hasil edit
+  // 🔹 Save edit results
   const handleEditSave = async () => {
     if (!selectedSession || !inputName.trim()) {
-      Alert.alert("Perhatian", "Nama sesi tidak boleh kosong.");
+      Alert.alert("Attention", "Session name cannot be empty.");
       return;
     }
 
@@ -133,30 +136,37 @@ export default function Manage() {
       setModalVisible(false);
       setInputName("");
       setSelectedSession(null);
-      Alert.alert("Sukses", "Nama sesi berhasil diperbarui!");
+      Alert.alert("Success", "Session name successfully updated!");
     } catch (error) {
       console.error("Error updating document: ", error);
-      Alert.alert("Error", "Gagal memperbarui nama sesi.");
+      Alert.alert("Error", "Failed to update session name.");
     }
   };
 
-  // 🔹 Buka modal edit
+  // 🔹 Open edit modal
   const openEditModal = (item: MonitoringSession) => {
     setSelectedSession(item);
     setInputName(item.sessionName);
     setModalVisible(true);
   };
 
-  // 🔹 Render item daftar
+  // 🔹 Render list item
   const renderItem = ({ item }: { item: MonitoringSession }) => (
     <View style={styles.card}>
-      <View>
-        <Text style={styles.cardName}>{item.sessionName}</Text>
-        <Text style={styles.cardValue}>
-          Total Titik GPS: {item.totalLocationPoints ?? "N/A"}
+      {/* This container has flex: 1 to use remaining space */}
+      <View style={{ flex: 1, marginRight: 10 }}>
+        <Text
+          style={styles.cardName}
+          numberOfLines={1} // Limit to 1 line
+          ellipsizeMode="tail" // Add '...' at the end if too long
+        >
+          {item.sessionName}
         </Text>
         <Text style={styles.cardValue}>
-          Waktu Mulai:{" "}
+          Total GPS Points: {item.totalLocationPoints ?? "N/A"}
+        </Text>
+        <Text style={styles.cardValue}>
+          Start Time:{" "}
           {new Date(item.startPoint?.timestamp || 0).toLocaleString()}
         </Text>
       </View>
@@ -183,13 +193,18 @@ export default function Manage() {
 
   return (
     <View style={styles.container}>
-      <Text style={styles.title}>Data Sesi Monitoring</Text>
+      <Text style={styles.title}>Monitoring Session Data</Text>
 
       {loading ? (
-        <Text style={styles.loadingText}>Memuat data...</Text>
+        <View style={{ alignItems: "center", marginTop: 30 }}>
+          <ActivityIndicator size="large" color="#4F46E5" />
+          <Text style={[styles.loadingText, { marginTop: 10 }]}>
+            Loading data...
+          </Text>
+        </View>
       ) : dataList.length === 0 ? (
         <Text style={styles.loadingText}>
-          Belum ada sesi monitoring tersimpan.
+          No monitoring sessions saved yet.
         </Text>
       ) : (
         <FlatList
@@ -200,7 +215,7 @@ export default function Manage() {
         />
       )}
 
-      {/* Modal Edit */}
+      {/* Edit Modal */}
       <Modal
         animationType="slide"
         transparent
@@ -209,9 +224,9 @@ export default function Manage() {
       >
         <View style={styles.modalOverlay}>
           <View style={styles.modalContainer}>
-            <Text style={styles.modalTitle}>Edit Nama Sesi</Text>
+            <Text style={styles.modalTitle}>Edit Session Name</Text>
             <TextInput
-              placeholder="Masukkan nama baru"
+              placeholder="Enter new name"
               style={styles.input}
               value={inputName}
               onChangeText={setInputName}
@@ -221,13 +236,13 @@ export default function Manage() {
                 style={[styles.modalButton, { backgroundColor: "#10B981" }]}
                 onPress={handleEditSave}
               >
-                <Text style={styles.modalButtonText}>Simpan</Text>
+                <Text style={styles.modalButtonText}>Save</Text>
               </TouchableOpacity>
               <TouchableOpacity
                 style={[styles.modalButton, { backgroundColor: "#EF4444" }]}
                 onPress={() => setModalVisible(false)}
               >
-                <Text style={styles.modalButtonText}>Batal</Text>
+                <Text style={styles.modalButtonText}>Cancel</Text>
               </TouchableOpacity>
             </View>
           </View>
@@ -236,6 +251,8 @@ export default function Manage() {
     </View>
   );
 }
+
+// ---
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: "#F9FAFB", padding: 20 },

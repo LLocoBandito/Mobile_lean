@@ -9,7 +9,7 @@ export default function ProfileScreen() {
   const router = useRouter();
   const auth = getAuth();
   const user = auth.currentUser;
-  const userId = user?.uid || "user_1"; // sementara gunakan user_1 jika belum login
+  const userId = user?.uid || "user_1"; // temporarily use user_1 if not logged in
 
   const [profile, setProfile] = useState({
     name: "",
@@ -19,7 +19,7 @@ export default function ProfileScreen() {
     emergencyPhone: "",
   });
 
-  // 🔹 Ambil data dari Firestore saat halaman dimuat
+  // 🔹 Fetch data from Firestore when the page loads
   useEffect(() => {
     const fetchProfile = async () => {
       try {
@@ -28,10 +28,10 @@ export default function ProfileScreen() {
         if (snapshot.exists()) {
           setProfile(snapshot.data() as typeof profile);
         } else {
-          console.log("Profil belum ada di Firestore");
+          console.log("Profile does not exist in Firestore yet");
         }
       } catch (error) {
-        console.error("Gagal memuat profil:", error);
+        console.error("Failed to load profile:", error);
       }
     };
 
@@ -39,19 +39,19 @@ export default function ProfileScreen() {
   }, []);
 
   const handleLogout = () => {
-    Alert.alert("Keluar dari Akun", "Apakah kamu yakin ingin logout?", [
-      { text: "Batal", style: "cancel" },
+    Alert.alert("Log Out", "Are you sure you want to log out?", [
+      { text: "Cancel", style: "cancel" },
       {
-        text: "Ya",
+        text: "Yes",
         style: "destructive",
         onPress: async () => {
           try {
             await signOut(auth);
-            Alert.alert("Berhasil Logout", "Sampai jumpa lagi 👋");
+            Alert.alert("Logout Successful", "See you again 👋");
             router.replace("/login");
           } catch (error) {
-            console.error("Gagal logout:", error);
-            Alert.alert("Error", "Gagal logout dari sistem.");
+            console.error("Failed to log out:", error);
+            Alert.alert("Error", "Failed to log out of the system.");
           }
         },
       },
@@ -60,22 +60,22 @@ export default function ProfileScreen() {
 
   return (
     <View style={styles.container}>
-      <Text style={styles.header}>Profil Pengguna</Text>
+      <Text style={styles.header}>User Profile</Text>
 
       <View style={styles.infoBox}>
-        <Text style={styles.label}>Nama:</Text>
+        <Text style={styles.label}>Name:</Text>
         <Text style={styles.value}>{profile.name || "-"}</Text>
 
-        <Text style={styles.label}>Alamat:</Text>
+        <Text style={styles.label}>Address:</Text>
         <Text style={styles.value}>{profile.address || "-"}</Text>
 
-        <Text style={styles.label}>Jenis Motor:</Text>
+        <Text style={styles.label}>Bike Type:</Text>
         <Text style={styles.value}>{profile.bikeType || "-"}</Text>
 
-        <Text style={styles.label}>Golongan Darah:</Text>
+        <Text style={styles.label}>Blood Type:</Text>
         <Text style={styles.value}>{profile.bloodType || "-"}</Text>
 
-        <Text style={styles.label}>Nomor Darurat:</Text>
+        <Text style={styles.label}>Emergency Number:</Text>
         <Text style={styles.value}>{profile.emergencyPhone || "-"}</Text>
       </View>
 
@@ -83,7 +83,7 @@ export default function ProfileScreen() {
         style={styles.editButton}
         onPress={() => router.push("/editprofile")}
       >
-        <Text style={styles.editButtonText}>Edit Profil</Text>
+        <Text style={styles.editButtonText}>Edit Profile</Text>
       </TouchableOpacity>
 
       <TouchableOpacity style={styles.logoutButton} onPress={handleLogout}>

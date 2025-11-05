@@ -19,7 +19,7 @@ export default function RegisterScreen() {
   const registrationHandler = async () => {
     // Validasi dasar
     if (!email || !password) {
-      Alert.alert("Error", "Email dan Password wajib diisi.");
+      Alert.alert("Error", "Email and Password are required");
       return;
     }
 
@@ -29,24 +29,24 @@ export default function RegisterScreen() {
       await handleRegister(email, password);
 
       Alert.alert(
-        "Sukses",
-        "Akun berhasil didaftar! Anda akan diarahkan ke Home."
+        "Success",
+        "Account successfully registered! You will be redirected to Home."
       );
       router.replace("../(tabs)");
     } catch (error: any) {
       // Menangani error dari Firebase
-      let errorMessage = "Pendaftaran gagal. Silakan coba lagi.";
+      let errorMessage = "Registration failed. Please try again.";
 
       if (error.code === "auth/email-already-in-use") {
         errorMessage =
-          "Email ini sudah terdaftar. Silakan login atau gunakan email lain.";
+          "This email is already registered. Please log in or use a different email.";
       } else if (error.code === "auth/weak-password") {
-        errorMessage = "Password terlalu lemah. Minimal 6 karakter.";
+        errorMessage = "Password is too weak. Minimum 6 characters.";
       } else if (error.message) {
         errorMessage = error.message;
       }
 
-      Alert.alert("Pendaftaran Gagal", errorMessage);
+      Alert.alert("Registration Failed", errorMessage);
     } finally {
       setLoading(false);
     }
