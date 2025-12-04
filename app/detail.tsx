@@ -10,7 +10,7 @@ import {
   View,
 } from "react-native";
 import MapView, { Marker, Polyline } from "react-native-maps";
-import { db } from "./../utils/firebaseConfig"; // pastikan path sesuai
+import { db } from "../utils/firebaseConfig"; // pastikan path sesuai
 
 type RootStackParamList = {
   DetailScreen: { id: string };
