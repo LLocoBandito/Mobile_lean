@@ -16,6 +16,7 @@ import {
 import MapView, { Marker, Polyline } from "react-native-maps";
 import { SafeAreaView } from "react-native-safe-area-context";
 import Svg, { Path } from "react-native-svg";
+// Sesuaikan path import firebaseConfig Anda
 import { db } from "../../utils/firebaseConfig";
 
 // Data structure
@@ -23,16 +24,23 @@ interface LocationPoint {
   latitude: number;
   longitude: number;
   timestamp: string;
-  roll?: number;
-  pitch?: number;
+  roll: number; // Dibuat non-opsional karena sekarang selalu terisi (minimal 0)
+  pitch: number; // Dibuat non-opsional karena sekarang selalu terisi (minimal 0)
 }
 
 export default function Home() {
   const [status, setStatus] = useState<"Disconnected" | "Connected" | "Paused">(
     "Disconnected"
   );
-  const [pitch, setPitch] = useState(0);
-  const [roll, setRoll] = useState(0);
+
+  // STATE BARU untuk Tampilan/Visualisasi UI
+  const [displayPitch, setDisplayPitch] = useState(0);
+  const [displayRoll, setDisplayRoll] = useState(0);
+
+  // REF untuk menyimpan nilai sensor terbaru secara SINKRON
+  const rollRef = useRef(0);
+  const pitchRef = useRef(0);
+
   const [subscription, setSubscription] = useState<{
     remove: () => void;
   } | null>(null);
@@ -56,6 +64,7 @@ export default function Home() {
       return;
     }
 
+    // LOCATION WATCHER: Mengambil nilai sensor dari REF
     const watcher = await Location.watchPositionAsync(
       { accuracy: Location.Accuracy.Highest, distanceInterval: 1 },
       (loc) => {
@@ -63,14 +72,16 @@ export default function Home() {
           latitude: loc.coords.latitude,
           longitude: loc.coords.longitude,
           timestamp: new Date().toISOString(),
-          roll,
-          pitch,
+          // GUNAKAN REF untuk mendapatkan nilai sensor terbaru
+          roll: rollRef.current,
+          pitch: pitchRef.current,
         };
         setLocationPoints((prev) => [...prev, newPoint]);
       }
     );
     setLocationWatcher(watcher);
 
+    // ACCELEROMETER LISTENER: Memperbarui REF dan STATE UI
     Accelerometer.setUpdateInterval(100);
     const sub = Accelerometer.addListener(({ x, y, z }) => {
       const rollRad = Math.atan2(-x, z);
@@ -79,8 +90,13 @@ export default function Home() {
       const pitchDeg = (pitchRad * 180) / Math.PI;
       const clampedRoll = Math.max(-50, Math.min(50, rollDeg));
 
-      setRoll(Math.round(clampedRoll));
-      setPitch(Math.round(pitchDeg));
+      // 1. Perbarui REF secara sinkron (untuk Location Watcher)
+      rollRef.current = Math.round(clampedRoll);
+      pitchRef.current = Math.round(pitchDeg);
+
+      // 2. Perbarui STATE untuk tampilan UI
+      setDisplayRoll(rollRef.current);
+      setDisplayPitch(pitchRef.current);
 
       Animated.timing(rotateAnim, {
         toValue: clampedRoll,
@@ -96,6 +112,12 @@ export default function Home() {
     if (subscription) subscription.remove();
     if (locationWatcher) locationWatcher.remove();
 
+    // Reset REF dan STATE UI
+    rollRef.current = 0;
+    pitchRef.current = 0;
+    setDisplayRoll(0);
+    setDisplayPitch(0);
+
     setLocationPoints([]);
     await activateMonitoring();
     setStatus("Connected");
@@ -109,8 +131,13 @@ export default function Home() {
     setSubscription(null);
     setLocationWatcher(null);
     setStatus("Disconnected");
-    setRoll(0);
-    setPitch(0);
+
+    // Reset STATE UI
+    setDisplayRoll(0);
+    setDisplayPitch(0);
+
+    // Tidak perlu mereset REF karena akan direset di startMonitoring
+
     Animated.timing(rotateAnim, {
       toValue: 0,
       duration: 400,
@@ -121,10 +148,12 @@ export default function Home() {
   // ------------------ Pause / Continue Button ------------------
   const togglePause = async () => {
     if (paused) {
+      // CONTINUE
       await activateMonitoring();
       setPaused(false);
       setStatus("Connected");
     } else {
+      // PAUSE
       if (subscription) subscription.remove();
       if (locationWatcher) locationWatcher.remove();
       setSubscription(null);
@@ -135,29 +164,73 @@ export default function Home() {
   };
 
   // ------------------ Save to Firebase ------------------
+  // ------------------ Save to Firebase (DENGAN DATA KEMIRINGAN KANAN & KIRI) ------------------
   const saveData = async () => {
     if (locationPoints.length === 0) {
-      Alert.alert("Attention", "No location/sensor data to save yet!");
+      Alert.alert("Perhatian", "Belum ada data lokasi/sensor untuk disimpan!");
       return;
     }
 
     if (status === "Connected") stopMonitoring();
 
     try {
+      // Hitung statistik kemiringan kanan & kiri
+      let sumRollRight = 0;
+      let sumRollLeft = 0;
+      let countRight = 0;
+      let countLeft = 0;
+      let maxRollRight = 0;
+      let maxRollLeft = 0;
+
+      let sumPitch = 0;
+
+      locationPoints.forEach((point) => {
+        const roll = point.roll;
+        const pitch = point.pitch;
+
+        sumPitch += pitch;
+
+        if (roll > 0) {
+          // Miring ke KANAN
+          sumRollRight += roll;
+          countRight++;
+          if (roll > maxRollRight) maxRollRight = roll;
+        } else if (roll < 0) {
+          // Miring ke KIRI
+          const absRoll = Math.abs(roll);
+          sumRollLeft += absRoll;
+          countLeft++;
+          if (absRoll > maxRollLeft) maxRollLeft = absRoll;
+        }
+      });
+
+      const avgRollRight =
+        countRight > 0 ? (sumRollRight / countRight).toFixed(1) : "0";
+      const avgRollLeft =
+        countLeft > 0 ? (sumRollLeft / countLeft).toFixed(1) : "0";
+      const avgPitch = (sumPitch / locationPoints.length).toFixed(1);
+
       const data = {
         sessionName: `Session_${new Date()
           .toISOString()
           .replace(/[:.]/g, "_")}`,
         totalPoints: locationPoints.length,
         path: locationPoints,
-        avgRoll: (
-          locationPoints.reduce((sum, p) => sum + (p.roll || 0), 0) /
+
+        // DATA BARU: KEMIRINGAN KANAN & KIRI
+        maxRollRight: Math.round(maxRollRight),
+        maxRollLeft: Math.round(maxRollLeft),
+        avgRollRight: avgRollRight,
+        avgRollLeft: avgRollLeft,
+
+        // Yang lama tetap ada
+        avgPitch: avgPitch,
+        avgRoll: // ini yang lama, bisa dihapus nanti kalau mau
+        (
+          locationPoints.reduce((sum, p) => sum + p.roll, 0) /
           locationPoints.length
         ).toFixed(1),
-        avgPitch: (
-          locationPoints.reduce((sum, p) => sum + (p.pitch || 0), 0) /
-          locationPoints.length
-        ).toFixed(1),
+
         startPoint: locationPoints[0],
         endPoint: locationPoints[locationPoints.length - 1],
         status: "Completed",
@@ -165,12 +238,12 @@ export default function Home() {
       };
 
       const docRef = await addDoc(collection(db, "monitoring_sessions"), data);
-      console.log("✅ Data saved with ID:", docRef.id);
-      Alert.alert("Success", "Data successfully saved to Firebase!");
+      console.log("Data tersimpan dengan ID:", docRef.id);
+      Alert.alert("Sukses", "Data sesi berhasil disimpan!");
       setLocationPoints([]);
-    } catch (error) {
-      console.error("❌ Failed to save:", error);
-      Alert.alert("Failed", "Could not save data to Firebase!");
+    } catch (error: any) {
+      console.error("Gagal simpan:", error);
+      Alert.alert("Gagal", "Tidak dapat menyimpan data: " + error.message);
     }
   };
 
@@ -231,20 +304,29 @@ export default function Home() {
         {/* Visualization */}
         <View style={styles.visualContainer}>
           <Svg height="200" width="300">
+            {/* Background Arc */}
             <Path
               d="M30 150 A120 120 0 0 1 270 150"
               stroke="#1F2937"
               strokeWidth="10"
               fill="none"
             />
+            {/* Active Roll Arc */}
             <Path
-              d={getArcPath(roll)}
-              stroke={roll === 0 ? "#9CA3AF" : roll > 0 ? "#10B981" : "#EF4444"}
+              d={getArcPath(displayRoll)}
+              stroke={
+                displayRoll === 0
+                  ? "#9CA3AF"
+                  : displayRoll > 0
+                  ? "#10B981"
+                  : "#EF4444"
+              }
               strokeWidth="10"
               fill="none"
             />
           </Svg>
-          <Text style={styles.angleText}>{Math.abs(roll)}°</Text>
+          {/* Menggunakan displayRoll untuk UI */}
+          <Text style={styles.angleText}>{Math.abs(displayRoll)}°</Text>
           <Animated.View
             style={[
               styles.bikeContainer,
@@ -254,13 +336,14 @@ export default function Home() {
             <View style={styles.bike} />
           </Animated.View>
           <Text style={styles.statusDirection}>
-            {roll === 0
+            {displayRoll === 0
               ? "Center"
-              : roll > 0
+              : displayRoll > 0
               ? "Tilting Right"
               : "Tilting Left"}
           </Text>
-          <Text style={styles.pitchText}>Pitch: {pitch}°</Text>
+          {/* Menggunakan displayPitch untuk UI */}
+          <Text style={styles.pitchText}>Pitch: {displayPitch}°</Text>
         </View>
 
         {/* Map */}
