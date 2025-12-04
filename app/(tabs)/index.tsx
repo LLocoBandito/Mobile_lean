@@ -1,8 +1,11 @@
+// app/index.tsx
 import { Ionicons } from "@expo/vector-icons";
+import { Audio } from "expo-av";
+import * as Haptics from "expo-haptics";
 import * as Location from "expo-location";
 import { Accelerometer } from "expo-sensors";
 import { addDoc, collection } from "firebase/firestore";
-import React, { useRef, useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import {
   Alert,
   Animated,
@@ -16,72 +19,107 @@ import {
 import MapView, { Marker, Polyline } from "react-native-maps";
 import { SafeAreaView } from "react-native-safe-area-context";
 import Svg, { Path } from "react-native-svg";
-// Sesuaikan path import firebaseConfig Anda
 import { db } from "../../utils/firebaseConfig";
 
-// Data structure
 interface LocationPoint {
   latitude: number;
   longitude: number;
   timestamp: string;
-  roll: number; // Dibuat non-opsional karena sekarang selalu terisi (minimal 0)
-  pitch: number; // Dibuat non-opsional karena sekarang selalu terisi (minimal 0)
+  roll: number;
+  pitch: number;
+  speed: number;
 }
 
 export default function Home() {
   const [status, setStatus] = useState<"Disconnected" | "Connected" | "Paused">(
     "Disconnected"
   );
-
-  // STATE BARU untuk Tampilan/Visualisasi UI
   const [displayPitch, setDisplayPitch] = useState(0);
   const [displayRoll, setDisplayRoll] = useState(0);
+  const [currentSpeed, setCurrentSpeed] = useState(0);
+  const [isBeeping, setIsBeeping] = useState(false);
 
-  // REF untuk menyimpan nilai sensor terbaru secara SINKRON
   const rollRef = useRef(0);
   const pitchRef = useRef(0);
+  const speedAnim = useRef(new Animated.Value(0)).current;
+  const rotateAnim = useRef(new Animated.Value(0)).current;
+  const beepIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
-  const [subscription, setSubscription] = useState<{
-    remove: () => void;
-  } | null>(null);
+  const [subscription, setSubscription] = useState<any>(null);
   const [locationWatcher, setLocationWatcher] =
     useState<Location.LocationSubscription | null>(null);
   const [locationPoints, setLocationPoints] = useState<LocationPoint[]>([]);
   const [paused, setPaused] = useState(false);
-  const rotateAnim = useRef(new Animated.Value(0)).current;
 
   const buttonSize = Dimensions.get("window").width / 2.4;
 
-  // ------------------ Activate Sensor & Location ------------------
+  // BEEP + VIBRATION
+  const playBeep = async () => {
+    try {
+      await Audio.setAudioModeAsync({ playsInSilentModeIOS: true });
+      const { sound } = await Audio.Sound.createAsync(
+        { uri: "system_sound_id://1005" },
+        { shouldPlay: true }
+      );
+      setTimeout(() => sound.unloadAsync(), 500);
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
+    } catch {
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
+    }
+  };
+
+  useEffect(() => {
+    if (currentSpeed > 120 && !isBeeping) {
+      setIsBeeping(true);
+      beepIntervalRef.current = setInterval(playBeep, 1000);
+    } else if (currentSpeed <= 120 && isBeeping) {
+      setIsBeeping(false);
+      if (beepIntervalRef.current) clearInterval(beepIntervalRef.current);
+    }
+    return () => {
+      if (beepIntervalRef.current) clearInterval(beepIntervalRef.current);
+    };
+  }, [currentSpeed]);
+
+  // START MONITORING
   const activateMonitoring = async () => {
     const { status: locStatus } =
       await Location.requestForegroundPermissionsAsync();
     if (locStatus !== "granted") {
-      Alert.alert(
-        "Permission Required",
-        "Location permission is required to track position!"
-      );
+      Alert.alert("Izin Ditolak", "Lokasi diperlukan untuk monitoring!");
       return;
     }
 
-    // LOCATION WATCHER: Mengambil nilai sensor dari REF
     const watcher = await Location.watchPositionAsync(
-      { accuracy: Location.Accuracy.Highest, distanceInterval: 1 },
+      {
+        accuracy: Location.Accuracy.Highest,
+        timeInterval: 1000,
+        distanceInterval: 1,
+      },
       (loc) => {
+        const speedKmh = loc.coords.speed
+          ? Math.round(loc.coords.speed * 3.6)
+          : 0;
+        setCurrentSpeed(speedKmh);
+        Animated.timing(speedAnim, {
+          toValue: Math.min(speedKmh, 145),
+          duration: 300,
+          useNativeDriver: false,
+        }).start();
+
         const newPoint: LocationPoint = {
           latitude: loc.coords.latitude,
           longitude: loc.coords.longitude,
           timestamp: new Date().toISOString(),
-          // GUNAKAN REF untuk mendapatkan nilai sensor terbaru
           roll: rollRef.current,
           pitch: pitchRef.current,
+          speed: speedKmh,
         };
         setLocationPoints((prev) => [...prev, newPoint]);
       }
     );
     setLocationWatcher(watcher);
 
-    // ACCELEROMETER LISTENER: Memperbarui REF dan STATE UI
     Accelerometer.setUpdateInterval(100);
     const sub = Accelerometer.addListener(({ x, y, z }) => {
       const rollRad = Math.atan2(-x, z);
@@ -90,11 +128,8 @@ export default function Home() {
       const pitchDeg = (pitchRad * 180) / Math.PI;
       const clampedRoll = Math.max(-50, Math.min(50, rollDeg));
 
-      // 1. Perbarui REF secara sinkron (untuk Location Watcher)
       rollRef.current = Math.round(clampedRoll);
       pitchRef.current = Math.round(pitchDeg);
-
-      // 2. Perbarui STATE untuk tampilan UI
       setDisplayRoll(rollRef.current);
       setDisplayPitch(pitchRef.current);
 
@@ -104,40 +139,30 @@ export default function Home() {
         useNativeDriver: true,
       }).start();
     });
-    setSubscription(sub as { remove: () => void });
+    setSubscription(sub);
   };
 
-  // ------------------ Start Button ------------------
   const startMonitoring = async () => {
     if (subscription) subscription.remove();
     if (locationWatcher) locationWatcher.remove();
-
-    // Reset REF dan STATE UI
-    rollRef.current = 0;
-    pitchRef.current = 0;
+    setLocationPoints([]);
+    setCurrentSpeed(0);
     setDisplayRoll(0);
     setDisplayPitch(0);
-
-    setLocationPoints([]);
     await activateMonitoring();
     setStatus("Connected");
     setPaused(false);
   };
 
-  // ------------------ Stop Button ------------------
   const stopMonitoring = () => {
-    if (subscription) subscription.remove();
-    if (locationWatcher) locationWatcher.remove();
+    subscription?.remove();
+    locationWatcher?.remove();
     setSubscription(null);
     setLocationWatcher(null);
     setStatus("Disconnected");
-
-    // Reset STATE UI
+    setCurrentSpeed(0);
     setDisplayRoll(0);
     setDisplayPitch(0);
-
-    // Tidak perlu mereset REF karena akan direset di startMonitoring
-
     Animated.timing(rotateAnim, {
       toValue: 0,
       duration: 400,
@@ -145,17 +170,14 @@ export default function Home() {
     }).start();
   };
 
-  // ------------------ Pause / Continue Button ------------------
   const togglePause = async () => {
     if (paused) {
-      // CONTINUE
       await activateMonitoring();
       setPaused(false);
       setStatus("Connected");
     } else {
-      // PAUSE
-      if (subscription) subscription.remove();
-      if (locationWatcher) locationWatcher.remove();
+      subscription?.remove();
+      locationWatcher?.remove();
       setSubscription(null);
       setLocationWatcher(null);
       setPaused(true);
@@ -163,112 +185,56 @@ export default function Home() {
     }
   };
 
-  // ------------------ Save to Firebase ------------------
-  // ------------------ Save to Firebase (DENGAN DATA KEMIRINGAN KANAN & KIRI) ------------------
   const saveData = async () => {
     if (locationPoints.length === 0) {
-      Alert.alert("Perhatian", "Belum ada data lokasi/sensor untuk disimpan!");
+      Alert.alert("Kosong", "Tidak ada data untuk disimpan!");
       return;
     }
+    stopMonitoring();
 
-    if (status === "Connected") stopMonitoring();
+    let sumR = 0,
+      sumL = 0,
+      cntR = 0,
+      cntL = 0,
+      maxR = 0,
+      maxL = 0,
+      sumP = 0;
+    locationPoints.forEach((p) => {
+      sumP += p.pitch;
+      if (p.roll > 0) {
+        sumR += p.roll;
+        cntR++;
+        if (p.roll > maxR) maxR = p.roll;
+      } else if (p.roll < 0) {
+        const abs = Math.abs(p.roll);
+        sumL += abs;
+        cntL++;
+        if (abs > maxL) maxL = abs;
+      }
+    });
 
     try {
-      // Hitung statistik kemiringan kanan & kiri
-      let sumRollRight = 0;
-      let sumRollLeft = 0;
-      let countRight = 0;
-      let countLeft = 0;
-      let maxRollRight = 0;
-      let maxRollLeft = 0;
-
-      let sumPitch = 0;
-
-      locationPoints.forEach((point) => {
-        const roll = point.roll;
-        const pitch = point.pitch;
-
-        sumPitch += pitch;
-
-        if (roll > 0) {
-          // Miring ke KANAN
-          sumRollRight += roll;
-          countRight++;
-          if (roll > maxRollRight) maxRollRight = roll;
-        } else if (roll < 0) {
-          // Miring ke KIRI
-          const absRoll = Math.abs(roll);
-          sumRollLeft += absRoll;
-          countLeft++;
-          if (absRoll > maxRollLeft) maxRollLeft = absRoll;
-        }
-      });
-
-      const avgRollRight =
-        countRight > 0 ? (sumRollRight / countRight).toFixed(1) : "0";
-      const avgRollLeft =
-        countLeft > 0 ? (sumRollLeft / countLeft).toFixed(1) : "0";
-      const avgPitch = (sumPitch / locationPoints.length).toFixed(1);
-
-      const data = {
+      await addDoc(collection(db, "monitoring_sessions"), {
         sessionName: `Session_${new Date()
           .toISOString()
           .replace(/[:.]/g, "_")}`,
         totalPoints: locationPoints.length,
         path: locationPoints,
-
-        // DATA BARU: KEMIRINGAN KANAN & KIRI
-        maxRollRight: Math.round(maxRollRight),
-        maxRollLeft: Math.round(maxRollLeft),
-        avgRollRight: avgRollRight,
-        avgRollLeft: avgRollLeft,
-
-        // Yang lama tetap ada
-        avgPitch: avgPitch,
-        avgRoll: // ini yang lama, bisa dihapus nanti kalau mau
-        (
-          locationPoints.reduce((sum, p) => sum + p.roll, 0) /
-          locationPoints.length
-        ).toFixed(1),
-
+        maxRollRight: Math.round(maxR),
+        maxRollLeft: Math.round(maxL),
+        avgRollRight: cntR > 0 ? (sumR / cntR).toFixed(1) : "0",
+        avgRollLeft: cntL > 0 ? (sumL / cntL).toFixed(1) : "0",
+        avgPitch: (sumP / locationPoints.length).toFixed(1),
         startPoint: locationPoints[0],
         endPoint: locationPoints[locationPoints.length - 1],
         status: "Completed",
         createdAt: new Date().toISOString(),
-      };
-
-      const docRef = await addDoc(collection(db, "monitoring_sessions"), data);
-      console.log("Data tersimpan dengan ID:", docRef.id);
-      Alert.alert("Sukses", "Data sesi berhasil disimpan!");
+      });
+      Alert.alert("Sukses!", "Data sesi berhasil disimpan ke Firebase!");
       setLocationPoints([]);
-    } catch (error: any) {
-      console.error("Gagal simpan:", error);
-      Alert.alert("Gagal", "Tidak dapat menyimpan data: " + error.message);
+    } catch (e: any) {
+      Alert.alert("Error", e.message);
     }
-  };
-
-  // ------------------ Utility Arc ------------------
-  const polarToCartesian = (
-    cx: number,
-    cy: number,
-    r: number,
-    angle: number
-  ) => {
-    const rad = ((angle - 90) * Math.PI) / 180;
-    return { x: cx + r * Math.cos(rad), y: cy + r * Math.sin(rad) };
-  };
-
-  const getArcPath = (angle: number) => {
-    const radius = 120,
-      centerX = 150,
-      centerY = 150;
-    const sweep = (angle / 50) * 120;
-    const mid = polarToCartesian(centerX, centerY, radius, 0);
-    const end = polarToCartesian(centerX, centerY, radius, sweep);
-    const largeArcFlag = Math.abs(sweep) > 180 ? 1 : 0;
-    return `M ${mid.x} ${mid.y} A ${radius} ${radius} 0 ${largeArcFlag} ${
-      sweep > 0 ? 1 : 0
-    } ${end.x} ${end.y}`;
   };
 
   const rotation = rotateAnim.interpolate({
@@ -276,12 +242,23 @@ export default function Home() {
     outputRange: ["-50deg", "50deg"],
   });
 
-  const isMonitoringActive = status === "Connected" || status === "Paused";
+  const getArcPath = (angle: number) => {
+    const r = 120,
+      cx = 150,
+      cy = 150;
+    const sweep = (angle / 50) * 120;
+    const start = { x: cx, y: cy - r };
+    const endX = cx + r * Math.sin((sweep * Math.PI) / 180);
+    const endY = cy - r * Math.cos((sweep * Math.PI) / 180);
+    const large = Math.abs(sweep) > 180 ? 1 : 0;
+    return `M ${start.x} ${start.y} A ${r} ${r} 0 ${large} ${
+      sweep > 0 ? 1 : 0
+    } ${endX} ${endY}`;
+  };
 
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: "#0F172A" }}>
       <ScrollView contentContainerStyle={styles.container}>
-        {/* Header */}
         <View style={styles.header}>
           <Text style={styles.title}>PrimeLean Monitor</Text>
           <View
@@ -301,17 +278,51 @@ export default function Home() {
           </View>
         </View>
 
-        {/* Visualization */}
+        {currentSpeed > 120 && (
+          <View style={styles.warningBanner}>
+            <Ionicons name="warning" size={28} color="#fff" />
+            <Text style={styles.warningText}>KECEPATAN BERLEBIH!</Text>
+          </View>
+        )}
+
+        <View style={styles.speedContainer}>
+          <View style={styles.speedHeader}>
+            <Ionicons name="speedometer" size={30} color="#FBBF24" />
+            <Text style={styles.speedText}>{currentSpeed} km/h</Text>
+          </View>
+          <View style={styles.speedBarBg}>
+            <Animated.View
+              style={[
+                styles.speedBarFill,
+                {
+                  width: speedAnim.interpolate({
+                    inputRange: [0, 145],
+                    outputRange: ["0%", "100%"],
+                  }),
+                  backgroundColor:
+                    currentSpeed < 60
+                      ? "#10B981"
+                      : currentSpeed < 100
+                      ? "#FBBF24"
+                      : "#EF4444",
+                },
+              ]}
+            />
+          </View>
+          <View style={styles.speedLabels}>
+            <Text style={styles.speedLabel}>0</Text>
+            <Text style={styles.speedLabel}>145 km/h</Text>
+          </View>
+        </View>
+
         <View style={styles.visualContainer}>
           <Svg height="200" width="300">
-            {/* Background Arc */}
             <Path
               d="M30 150 A120 120 0 0 1 270 150"
               stroke="#1F2937"
               strokeWidth="10"
               fill="none"
             />
-            {/* Active Roll Arc */}
             <Path
               d={getArcPath(displayRoll)}
               stroke={
@@ -325,7 +336,6 @@ export default function Home() {
               fill="none"
             />
           </Svg>
-          {/* Menggunakan displayRoll untuk UI */}
           <Text style={styles.angleText}>{Math.abs(displayRoll)}°</Text>
           <Animated.View
             style={[
@@ -342,20 +352,12 @@ export default function Home() {
               ? "Tilting Right"
               : "Tilting Left"}
           </Text>
-          {/* Menggunakan displayPitch untuk UI */}
           <Text style={styles.pitchText}>Pitch: {displayPitch}°</Text>
         </View>
 
-        {/* Map */}
         <View style={styles.mapContainer}>
           <MapView
             style={{ flex: 1 }}
-            initialRegion={{
-              latitude: locationPoints.at(-1)?.latitude || -8.65,
-              longitude: locationPoints.at(-1)?.longitude || 115.22,
-              latitudeDelta: 0.01,
-              longitudeDelta: 0.01,
-            }}
             region={{
               latitude: locationPoints.at(-1)?.latitude || -8.65,
               longitude: locationPoints.at(-1)?.longitude || 115.22,
@@ -377,7 +379,7 @@ export default function Home() {
                 />
                 <Marker
                   coordinate={locationPoints.at(-1)!}
-                  title="Current"
+                  title="Now"
                   pinColor="red"
                 />
               </>
@@ -385,7 +387,6 @@ export default function Home() {
           </MapView>
         </View>
 
-        {/* Control Buttons */}
         <View style={styles.controlButtons}>
           <TouchableOpacity
             style={[
@@ -395,7 +396,7 @@ export default function Home() {
             onPress={startMonitoring}
             disabled={status === "Connected"}
           >
-            <Ionicons name="play-outline" size={20} color="#fff" />
+            <Ionicons name="play" size={24} color="#fff" />
             <Text style={styles.mainBtnText}>Start</Text>
           </TouchableOpacity>
 
@@ -405,15 +406,11 @@ export default function Home() {
               { backgroundColor: "#FBBF24", width: buttonSize },
             ]}
             onPress={togglePause}
-            disabled={!isMonitoringActive}
+            disabled={!paused && status !== "Connected"}
           >
-            <Ionicons
-              name={paused ? "play-outline" : "pause-outline"}
-              size={20}
-              color="#fff"
-            />
+            <Ionicons name={paused ? "play" : "pause"} size={24} color="#fff" />
             <Text style={styles.mainBtnText}>
-              {paused ? "Continue" : "Pause"}
+              {paused ? "Lanjut" : "Pause"}
             </Text>
           </TouchableOpacity>
 
@@ -429,8 +426,8 @@ export default function Home() {
             onPress={saveData}
             disabled={locationPoints.length === 0}
           >
-            <Ionicons name="save-outline" size={20} color="#fff" />
-            <Text style={styles.mainBtnText}>Save</Text>
+            <Ionicons name="save" size={24} color="#fff" />
+            <Text style={styles.mainBtnText}>Simpan</Text>
           </TouchableOpacity>
 
           <TouchableOpacity
@@ -440,7 +437,7 @@ export default function Home() {
             ]}
             onPress={stopMonitoring}
           >
-            <Ionicons name="stop-outline" size={20} color="#fff" />
+            <Ionicons name="stop" size={24} color="#fff" />
             <Text style={styles.mainBtnText}>Stop</Text>
           </TouchableOpacity>
         </View>
@@ -449,55 +446,99 @@ export default function Home() {
   );
 }
 
-// ------------------ Styles ------------------
 const styles = StyleSheet.create({
   container: { flexGrow: 1, padding: 20, backgroundColor: "#0F172A" },
   header: {
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "center",
+    marginBottom: 15,
   },
-  title: { fontSize: 22, fontWeight: "700", color: "#F9FAFB" },
-  statusBadge: { borderRadius: 12, paddingVertical: 6, paddingHorizontal: 12 },
-  statusText: { color: "#fff", fontWeight: "600" },
-  visualContainer: { alignItems: "center", marginTop: 40 },
+  title: { fontSize: 26, fontWeight: "800", color: "#F9FAFB" },
+  statusBadge: { borderRadius: 12, paddingVertical: 8, paddingHorizontal: 16 },
+  statusText: { color: "#fff", fontWeight: "700" },
+
+  warningBanner: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "#DC2626",
+    marginHorizontal: 20,
+    padding: 14,
+    borderRadius: 12,
+    gap: 12,
+    marginBottom: 10,
+  },
+  warningText: { color: "#fff", fontSize: 19, fontWeight: "800" },
+
+  speedContainer: { marginVertical: 20 },
+  speedHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 12,
+    marginBottom: 10,
+  },
+  speedText: { fontSize: 38, fontWeight: "900", color: "#FBBF24" },
+  speedBarBg: {
+    height: 38,
+    backgroundColor: "#1F2937",
+    borderRadius: 19,
+    overflow: "hidden",
+    borderWidth: 2,
+    borderColor: "#334155",
+  },
+  speedBarFill: { height: "100%", borderRadius: 17 },
+  speedLabels: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    marginTop: 8,
+  },
+  speedLabel: { color: "#9CA3AF", fontSize: 13 },
+
+  visualContainer: { alignItems: "center", marginVertical: 30 },
   angleText: {
-    fontSize: 20,
-    fontWeight: "700",
+    fontSize: 44,
+    fontWeight: "900",
     color: "#E5E7EB",
     position: "absolute",
-    top: 60,
-    left: 55,
+    top: 68,
   },
-  pitchText: { color: "#9CA3AF", marginTop: 10, fontSize: 16 },
-  bikeContainer: { marginTop: -60 },
-  bike: { width: 40, height: 90, backgroundColor: "#F3F4F6", borderRadius: 20 },
+  bikeContainer: { marginTop: -75 },
+  bike: {
+    width: 46,
+    height: 104,
+    backgroundColor: "#F3F4F6",
+    borderRadius: 23,
+  },
   statusDirection: {
     color: "#E5E7EB",
-    fontSize: 18,
-    fontWeight: "500",
-    marginTop: 15,
+    fontSize: 20,
+    fontWeight: "600",
+    marginTop: 20,
   },
+  pitchText: { color: "#9CA3AF", fontSize: 17, marginTop: 8 },
+
   mapContainer: {
-    height: 250,
-    borderRadius: 12,
+    height: 300,
+    borderRadius: 16,
     overflow: "hidden",
-    marginTop: 30,
+    marginVertical: 20,
   },
+
   controlButtons: {
     flexDirection: "row",
     flexWrap: "wrap",
     justifyContent: "center",
-    marginTop: 35,
-    gap: 12,
+    gap: 16,
+    marginVertical: 20,
   },
   mainBtn: {
     flexDirection: "row",
-    justifyContent: "center",
     alignItems: "center",
-    gap: 8,
-    borderRadius: 12,
-    paddingVertical: 16,
+    justifyContent: "center",
+    gap: 10,
+    paddingVertical: 18,
+    borderRadius: 16,
   },
-  mainBtnText: { color: "#fff", fontWeight: "600", fontSize: 15 },
+  mainBtnText: { color: "#fff", fontWeight: "700", fontSize: 16 },
 });
