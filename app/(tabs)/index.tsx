@@ -3,6 +3,7 @@ import { Ionicons } from "@expo/vector-icons";
 import { Audio } from "expo-av";
 import * as Haptics from "expo-haptics";
 import * as Location from "expo-location";
+import * as ScreenOrientation from "expo-screen-orientation";
 import { Accelerometer } from "expo-sensors";
 import { addDoc, collection } from "firebase/firestore";
 import React, { useEffect, useRef, useState } from "react";
@@ -19,8 +20,11 @@ import {
 import MapView, { Marker, Polyline } from "react-native-maps";
 import { SafeAreaView } from "react-native-safe-area-context";
 import Svg, { Path } from "react-native-svg";
-import { db } from "../../utils/firebaseConfig";
+import { db } from "../../utils/firebaseConfig"; // Pastikan path ini benar
 
+const { width: SCREEN_WIDTH } = Dimensions.get("window");
+
+// --- TIPE DATA ---
 interface LocationPoint {
   latitude: number;
   longitude: number;
@@ -30,34 +34,63 @@ interface LocationPoint {
   speed: number;
 }
 
+type ColorScheme = "dark" | "light";
+type Status = "Disconnected" | "Connected" | "Paused";
+type OrientationMode = "Portrait" | "Landscape";
+
+// --- FUNGSI UTAMA KOMPONEN ---
 export default function Home() {
-  const [status, setStatus] = useState<"Disconnected" | "Connected" | "Paused">(
-    "Disconnected"
-  );
+  const [colorScheme, setColorScheme] = useState<ColorScheme>("dark");
+  const [status, setStatus] = useState<Status>("Disconnected");
   const [displayPitch, setDisplayPitch] = useState(0);
   const [displayRoll, setDisplayRoll] = useState(0);
   const [currentSpeed, setCurrentSpeed] = useState(0);
   const [isBeeping, setIsBeeping] = useState(false);
+  const [orientationMode, setOrientationMode] =
+    useState<OrientationMode>("Portrait");
 
+  // Hitung ulang dimensi saat orientasi berubah
+  const buttonSize = Dimensions.get("window").width / 2.4;
+
+  // Refs untuk nilai yang sering diupdate
   const rollRef = useRef(0);
   const pitchRef = useRef(0);
   const speedAnim = useRef(new Animated.Value(0)).current;
   const rotateAnim = useRef(new Animated.Value(0)).current;
   const beepIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
+  // States untuk monitoring
   const [subscription, setSubscription] = useState<any>(null);
   const [locationWatcher, setLocationWatcher] =
     useState<Location.LocationSubscription | null>(null);
   const [locationPoints, setLocationPoints] = useState<LocationPoint[]>([]);
   const [paused, setPaused] = useState(false);
 
-  const buttonSize = Dimensions.get("window").width / 2.4;
+  // --- DEFINISI WARNA DINAMIS ---
+  const getColors = (mode: ColorScheme) => ({
+    // Backgrounds
+    BG_PRIMARY: mode === "dark" ? "#0F172A" : "#F8F8F8",
+    BG_CARD: mode === "dark" ? "#1F2937" : "#FFFFFF",
+    BG_BUTTON: mode === "dark" ? "#374151" : "#E5E7EB",
+    // Text & Border
+    TEXT_PRIMARY: mode === "dark" ? "#F9FAFB" : "#1F2937",
+    TEXT_SECONDARY: mode === "dark" ? "#9CA3AF" : "#6B7280",
+    BORDER_COLOR: mode === "dark" ? "#334155" : "#D1D5DB",
+    // Accents
+    ACCENT_SAFE: "#10B981", // Green
+    ACCENT_WARNING: "#FBBF24", // Yellow
+    ACCENT_DANGER: "#EF4444", // Red
+    ACCENT_INFO: "#3B82F6", // Blue
+  });
 
-  // BEEP + VIBRATION
+  const colors = getColors(colorScheme);
+
+  // --- LOGIKA BEEP + VIBRATION ---
   const playBeep = async () => {
     try {
       await Audio.setAudioModeAsync({ playsInSilentModeIOS: true });
       const { sound } = await Audio.Sound.createAsync(
+        // Coba sound ID yang berbeda jika 1005 tidak bekerja
         { uri: "system_sound_id://1005" },
         { shouldPlay: true }
       );
@@ -81,8 +114,9 @@ export default function Home() {
     };
   }, [currentSpeed]);
 
-  // START MONITORING
+  // --- LOGIKA MONITORING (DENGAN PENYESUAIAN ORIENTASI) ---
   const activateMonitoring = async () => {
+    // 1. Izin Lokasi
     const { status: locStatus } =
       await Location.requestForegroundPermissionsAsync();
     if (locStatus !== "granted") {
@@ -90,6 +124,7 @@ export default function Home() {
       return;
     }
 
+    // 2. Location Watcher
     const watcher = await Location.watchPositionAsync(
       {
         accuracy: Location.Accuracy.Highest,
@@ -120,12 +155,31 @@ export default function Home() {
     );
     setLocationWatcher(watcher);
 
+    // 3. Accelerometer Listener (DENGAN PENYESUAIAN RUMUS)
     Accelerometer.setUpdateInterval(100);
     const sub = Accelerometer.addListener(({ x, y, z }) => {
-      const rollRad = Math.atan2(-x, z);
-      const pitchRad = Math.atan2(y, Math.sqrt(x * x + z * z));
+      let rollRad: number, pitchRad: number;
+
+      if (orientationMode === "Portrait") {
+        // ✅ PORTRAIT: Roll dari X, Pitch dari Y
+        // Roll: Kemiringan samping
+        rollRad = Math.atan2(-x, z);
+        // Pitch: Kemiringan maju/mundur
+        pitchRad = Math.atan2(y, Math.sqrt(x * x + z * z));
+      } else {
+        // 🛠️ LANDSCAPE: Penyesuaian sumbu untuk LANDSCAPE_RIGHT (90 derajat kanan)
+        // Roll: Sumbu yang bertanggung jawab untuk kemiringan lateral saat ini adalah Y.
+        rollRad = Math.atan2(y, z);
+
+        // Pitch: Sumbu yang bertanggung jawab untuk nungging/mendongak saat ini adalah X.
+        // Perlu tanda negatif agar nilai Pitch tetap logis.
+        pitchRad = Math.atan2(-x, Math.sqrt(y * y + z * z));
+      }
+
       const rollDeg = (rollRad * 180) / Math.PI;
       const pitchDeg = (pitchRad * 180) / Math.PI;
+
+      // Batasi Roll pada nilai yang masuk akal
       const clampedRoll = Math.max(-50, Math.min(50, rollDeg));
 
       rollRef.current = Math.round(clampedRoll);
@@ -229,6 +283,7 @@ export default function Home() {
         endPoint: locationPoints[locationPoints.length - 1],
         status: "Completed",
         createdAt: new Date().toISOString(),
+        orientation: orientationMode,
       });
       Alert.alert("Sukses!", "Data sesi berhasil disimpan ke Firebase!");
       setLocationPoints([]);
@@ -237,6 +292,7 @@ export default function Home() {
     }
   };
 
+  // --- FUNGSI UI PENDUKUNG ---
   const rotation = rotateAnim.interpolate({
     inputRange: [-50, 50],
     outputRange: ["-50deg", "50deg"],
@@ -256,28 +312,113 @@ export default function Home() {
     } ${endX} ${endY}`;
   };
 
+  const getSpeedBarColor = () => {
+    if (currentSpeed < 60) return colors.ACCENT_SAFE;
+    if (currentSpeed < 100) return colors.ACCENT_WARNING;
+    return colors.ACCENT_DANGER;
+  };
+
+  const getRollPathColor = () => {
+    if (displayRoll === 0) return colors.TEXT_SECONDARY;
+    if (displayRoll > 0) return colors.ACCENT_SAFE;
+    return colors.ACCENT_DANGER;
+  };
+
+  // --- KOMPONEN SWITCH TEMA ---
+  const ThemeSwitcher = () => (
+    <TouchableOpacity
+      onPress={() => setColorScheme(colorScheme === "dark" ? "light" : "dark")}
+      style={styles.themeSwitcher}
+    >
+      <Ionicons
+        name={colorScheme === "dark" ? "sunny-outline" : "moon-outline"}
+        size={24}
+        color={colors.TEXT_PRIMARY}
+      />
+    </TouchableOpacity>
+  );
+
+  // --- KOMPONEN SWITCH ORIENTASI BARU ---
+  const LandscapeToggle = () => {
+    const toggleOrientation = async () => {
+      if (orientationMode === "Portrait") {
+        await ScreenOrientation.lockAsync(
+          ScreenOrientation.OrientationLock.LANDSCAPE_RIGHT
+        );
+        setOrientationMode("Landscape");
+      } else {
+        await ScreenOrientation.lockAsync(
+          ScreenOrientation.OrientationLock.PORTRAIT_UP
+        );
+        setOrientationMode("Portrait");
+      }
+      // Hentikan dan mulai ulang monitoring agar accelerometer listener menggunakan formula baru
+      if (status === "Connected" || status === "Paused") {
+        stopMonitoring();
+        setTimeout(startMonitoring, 500);
+      }
+    };
+
+    return (
+      <TouchableOpacity
+        onPress={toggleOrientation}
+        style={styles.themeSwitcher}
+      >
+        <Ionicons
+          name={
+            orientationMode === "Portrait"
+              ? "phone-portrait-outline"
+              : "phone-landscape-outline"
+          }
+          size={24}
+          color={
+            orientationMode === "Portrait"
+              ? colors.ACCENT_SAFE
+              : colors.ACCENT_INFO
+          }
+        />
+      </TouchableOpacity>
+    );
+  };
+
+  // --- RENDER UTAMA ---
   return (
-    <SafeAreaView style={{ flex: 1, backgroundColor: "#0F172A" }}>
-      <ScrollView contentContainerStyle={styles.container}>
+    <SafeAreaView
+      style={[styles.safeArea, { backgroundColor: colors.BG_PRIMARY }]}
+    >
+      <ScrollView
+        contentContainerStyle={[
+          styles.container,
+          { backgroundColor: colors.BG_PRIMARY },
+        ]}
+      >
+        {/* HEADER & STATUS */}
         <View style={styles.header}>
-          <Text style={styles.title}>PrimeLean Monitor</Text>
-          <View
-            style={[
-              styles.statusBadge,
-              {
-                backgroundColor:
-                  status === "Connected"
-                    ? "#10B981"
-                    : status === "Paused"
-                    ? "#FBBF24"
-                    : "#EF4444",
-              },
-            ]}
-          >
-            <Text style={styles.statusText}>{status}</Text>
+          <Text style={[styles.title, { color: colors.TEXT_PRIMARY }]}>
+            PrimeLean Monitor
+          </Text>
+          <View style={{ flexDirection: "row", alignItems: "center", gap: 10 }}>
+            <LandscapeToggle />
+            <ThemeSwitcher />
+            <View
+              style={[
+                styles.statusBadge,
+                {
+                  backgroundColor:
+                    status === "Connected"
+                      ? colors.ACCENT_SAFE
+                      : status === "Paused"
+                      ? colors.ACCENT_WARNING
+                      : colors.ACCENT_DANGER,
+                },
+              ]}
+            >
+              <Text style={styles.statusText}>{status}</Text>
+            </View>
           </View>
         </View>
 
+        {/* WARNING BANNER */}
         {currentSpeed > 120 && (
           <View style={styles.warningBanner}>
             <Ionicons name="warning" size={28} color="#fff" />
@@ -285,12 +426,21 @@ export default function Home() {
           </View>
         )}
 
-        <View style={styles.speedContainer}>
+        {/* 1. SPEEDOMETER */}
+        <View style={[styles.card, { backgroundColor: colors.BG_CARD }]}>
           <View style={styles.speedHeader}>
-            <Ionicons name="speedometer" size={30} color="#FBBF24" />
-            <Text style={styles.speedText}>{currentSpeed} km/h</Text>
+            <Ionicons
+              name="speedometer"
+              size={30}
+              color={colors.ACCENT_WARNING}
+            />
+            <Text style={[styles.speedText, { color: colors.ACCENT_WARNING }]}>
+              {currentSpeed} km/h
+            </Text>
           </View>
-          <View style={styles.speedBarBg}>
+          <View
+            style={[styles.speedBarBg, { backgroundColor: colors.BG_BUTTON }]}
+          >
             <Animated.View
               style={[
                 styles.speedBarFill,
@@ -299,65 +449,88 @@ export default function Home() {
                     inputRange: [0, 145],
                     outputRange: ["0%", "100%"],
                   }),
-                  backgroundColor:
-                    currentSpeed < 60
-                      ? "#10B981"
-                      : currentSpeed < 100
-                      ? "#FBBF24"
-                      : "#EF4444",
+                  backgroundColor: getSpeedBarColor(),
                 },
               ]}
             />
           </View>
           <View style={styles.speedLabels}>
-            <Text style={styles.speedLabel}>0</Text>
-            <Text style={styles.speedLabel}>145 km/h</Text>
+            <Text style={[styles.speedLabel, { color: colors.TEXT_SECONDARY }]}>
+              0
+            </Text>
+            <Text style={[styles.speedLabel, { color: colors.TEXT_SECONDARY }]}>
+              145 km/h
+            </Text>
           </View>
         </View>
 
-        <View style={styles.visualContainer}>
+        {/* 2. ROLL & PITCH VISUALIZATION */}
+        <View
+          style={[
+            styles.card,
+            styles.visualContainer,
+            { backgroundColor: colors.BG_CARD },
+          ]}
+        >
+          <Text
+            style={[styles.statusDirection, { color: colors.TEXT_PRIMARY }]}
+          >
+            Sudut Kemiringan (Roll)
+          </Text>
           <Svg height="200" width="300">
             <Path
               d="M30 150 A120 120 0 0 1 270 150"
-              stroke="#1F2937"
+              stroke={colors.BORDER_COLOR}
               strokeWidth="10"
               fill="none"
             />
             <Path
               d={getArcPath(displayRoll)}
-              stroke={
-                displayRoll === 0
-                  ? "#9CA3AF"
-                  : displayRoll > 0
-                  ? "#10B981"
-                  : "#EF4444"
-              }
+              stroke={getRollPathColor()}
               strokeWidth="10"
               fill="none"
             />
           </Svg>
-          <Text style={styles.angleText}>{Math.abs(displayRoll)}°</Text>
+          <Text style={[styles.angleText, { color: colors.TEXT_PRIMARY }]}>
+            {Math.abs(displayRoll)}°
+          </Text>
           <Animated.View
             style={[
               styles.bikeContainer,
               { transform: [{ rotate: rotation }] },
             ]}
           >
-            <View style={styles.bike} />
+            <View
+              style={[styles.bike, { backgroundColor: colors.TEXT_PRIMARY }]}
+            />
           </Animated.View>
-          <Text style={styles.statusDirection}>
+          <Text
+            style={[
+              styles.statusDirection,
+              { marginTop: 20, color: colors.TEXT_SECONDARY },
+            ]}
+          >
             {displayRoll === 0
               ? "Center"
               : displayRoll > 0
               ? "Tilting Right"
               : "Tilting Left"}
           </Text>
-          <Text style={styles.pitchText}>Pitch: {displayPitch}°</Text>
+          <Text style={[styles.pitchText, { color: colors.TEXT_SECONDARY }]}>
+            Pitch: {displayPitch}°
+          </Text>
         </View>
 
-        <View style={styles.mapContainer}>
+        {/* 3. MAP VIEW */}
+        <View
+          style={[
+            styles.card,
+            styles.mapContainer,
+            { backgroundColor: colors.BG_CARD },
+          ]}
+        >
           <MapView
-            style={{ flex: 1 }}
+            style={{ flex: 1, width: "100%" }}
             region={{
               latitude: locationPoints.at(-1)?.latitude || -8.65,
               longitude: locationPoints.at(-1)?.longitude || 115.22,
@@ -370,7 +543,7 @@ export default function Home() {
                 <Polyline
                   coordinates={locationPoints}
                   strokeWidth={4}
-                  strokeColor="#3B82F6"
+                  strokeColor={colors.ACCENT_INFO}
                 />
                 <Marker
                   coordinate={locationPoints[0]}
@@ -387,11 +560,19 @@ export default function Home() {
           </MapView>
         </View>
 
+        {/* 4. CONTROL BUTTONS */}
         <View style={styles.controlButtons}>
+          {/* Tombol Start */}
           <TouchableOpacity
             style={[
               styles.mainBtn,
-              { backgroundColor: "#10B981", width: buttonSize },
+              {
+                backgroundColor:
+                  status === "Connected"
+                    ? colors.BG_BUTTON
+                    : colors.ACCENT_SAFE,
+                width: buttonSize,
+              },
             ]}
             onPress={startMonitoring}
             disabled={status === "Connected"}
@@ -400,10 +581,17 @@ export default function Home() {
             <Text style={styles.mainBtnText}>Start</Text>
           </TouchableOpacity>
 
+          {/* Tombol Pause/Lanjut */}
           <TouchableOpacity
             style={[
               styles.mainBtn,
-              { backgroundColor: "#FBBF24", width: buttonSize },
+              {
+                backgroundColor:
+                  !paused && status !== "Connected"
+                    ? colors.BG_BUTTON
+                    : colors.ACCENT_WARNING,
+                width: buttonSize,
+              },
             ]}
             onPress={togglePause}
             disabled={!paused && status !== "Connected"}
@@ -414,12 +602,15 @@ export default function Home() {
             </Text>
           </TouchableOpacity>
 
+          {/* Tombol Simpan */}
           <TouchableOpacity
             style={[
               styles.mainBtn,
               {
                 backgroundColor:
-                  locationPoints.length > 0 ? "#3B82F6" : "#6B7280",
+                  locationPoints.length > 0
+                    ? colors.ACCENT_INFO
+                    : colors.BG_BUTTON,
                 width: buttonSize,
               },
             ]}
@@ -430,10 +621,11 @@ export default function Home() {
             <Text style={styles.mainBtnText}>Simpan</Text>
           </TouchableOpacity>
 
+          {/* Tombol Stop */}
           <TouchableOpacity
             style={[
               styles.mainBtn,
-              { backgroundColor: "#EF4444", width: buttonSize },
+              { backgroundColor: colors.ACCENT_DANGER, width: buttonSize },
             ]}
             onPress={stopMonitoring}
           >
@@ -446,91 +638,104 @@ export default function Home() {
   );
 }
 
+// --- STYLES (Dinamis dan Static) ---
 const styles = StyleSheet.create({
-  container: { flexGrow: 1, padding: 20, backgroundColor: "#0F172A" },
+  safeArea: { flex: 1 },
+  container: { flexGrow: 1, padding: 20 },
+  card: {
+    borderRadius: 16,
+    padding: 20,
+    marginBottom: 20,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.1,
+    shadowRadius: 5,
+    elevation: 8,
+  },
+
+  // Header & Status
   header: {
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "center",
     marginBottom: 15,
   },
-  title: { fontSize: 26, fontWeight: "800", color: "#F9FAFB" },
+  title: { fontSize: 28, fontWeight: "800" },
   statusBadge: { borderRadius: 12, paddingVertical: 8, paddingHorizontal: 16 },
   statusText: { color: "#fff", fontWeight: "700" },
+  themeSwitcher: {
+    padding: 5,
+    borderRadius: 20,
+  },
 
+  // Warning
   warningBanner: {
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "center",
     backgroundColor: "#DC2626",
-    marginHorizontal: 20,
     padding: 14,
     borderRadius: 12,
     gap: 12,
-    marginBottom: 10,
+    marginBottom: 20,
   },
   warningText: { color: "#fff", fontSize: 19, fontWeight: "800" },
 
-  speedContainer: { marginVertical: 20 },
+  // Speedometer
   speedHeader: {
     flexDirection: "row",
     alignItems: "center",
     gap: 12,
     marginBottom: 10,
   },
-  speedText: { fontSize: 38, fontWeight: "900", color: "#FBBF24" },
+  speedText: { fontSize: 48, fontWeight: "900" },
   speedBarBg: {
-    height: 38,
-    backgroundColor: "#1F2937",
-    borderRadius: 19,
+    height: 40,
+    borderRadius: 20,
     overflow: "hidden",
     borderWidth: 2,
-    borderColor: "#334155",
   },
-  speedBarFill: { height: "100%", borderRadius: 17 },
+  speedBarFill: { height: "100%", borderRadius: 18 },
   speedLabels: {
     flexDirection: "row",
     justifyContent: "space-between",
     marginTop: 8,
   },
-  speedLabel: { color: "#9CA3AF", fontSize: 13 },
+  speedLabel: { fontSize: 14 },
 
-  visualContainer: { alignItems: "center", marginVertical: 30 },
+  // Roll & Pitch Visual
+  visualContainer: {
+    alignItems: "center",
+  },
   angleText: {
-    fontSize: 44,
+    fontSize: 52,
     fontWeight: "900",
-    color: "#E5E7EB",
     position: "absolute",
-    top: 68,
+    top: 60,
   },
   bikeContainer: { marginTop: -75 },
   bike: {
     width: 46,
     height: 104,
-    backgroundColor: "#F3F4F6",
     borderRadius: 23,
   },
   statusDirection: {
-    color: "#E5E7EB",
-    fontSize: 20,
+    fontSize: 18,
     fontWeight: "600",
-    marginTop: 20,
+    marginTop: 10,
   },
-  pitchText: { color: "#9CA3AF", fontSize: 17, marginTop: 8 },
+  pitchText: { fontSize: 16, marginTop: 8 },
 
-  mapContainer: {
-    height: 300,
-    borderRadius: 16,
-    overflow: "hidden",
-    marginVertical: 20,
-  },
+  // Map
+  mapContainer: { height: 300, padding: 0, overflow: "hidden" },
 
+  // Controls
   controlButtons: {
     flexDirection: "row",
     flexWrap: "wrap",
     justifyContent: "center",
     gap: 16,
-    marginVertical: 20,
+    marginVertical: 10,
   },
   mainBtn: {
     flexDirection: "row",
@@ -539,6 +744,11 @@ const styles = StyleSheet.create({
     gap: 10,
     paddingVertical: 18,
     borderRadius: 16,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.2,
+    shadowRadius: 3,
+    elevation: 4,
   },
-  mainBtnText: { color: "#fff", fontWeight: "700", fontSize: 16 },
+  mainBtnText: { color: "#fff", fontWeight: "700", fontSize: 17 },
 });

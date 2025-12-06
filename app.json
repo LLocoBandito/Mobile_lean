@@ -1,6 +1,6 @@
 {
   "expo": {
-    "name": "lean_monitoring",
+    "name": "Lean Monitoring",
     "slug": "lean_monitoring",
     "version": "1.0.0",
     "orientation": "portrait",
@@ -8,23 +8,21 @@
     "scheme": "leanmonitoring",
     "userInterfaceStyle": "automatic",
     "newArchEnabled": true,
-    "ios": {
-      "supportsTablet": true
-    },
+
     "android": {
+      "package": "com.riyasa.lean_monitoring",
+      "versionCode": 1,
       "adaptiveIcon": {
-        "backgroundColor": "#E6F4FE",
         "foregroundImage": "./assets/images/android-icon-foreground.png",
-        "backgroundImage": "./assets/images/android-icon-background.png",
-        "monochromeImage": "./assets/images/android-icon-monochrome.png"
-      },
-      "edgeToEdgeEnabled": true,
-      "predictiveBackGestureEnabled": false
+        "backgroundColor": "#E6F4FE"
+      }
     },
-    "web": {
-      "output": "static",
-      "favicon": "./assets/images/favicon.png"
+
+    "ios": {
+      "bundleIdentifier": "com.riyasa.leanmonitoring",
+      "buildNumber": "1"
     },
+
     "plugins": [
       "expo-router",
       [
@@ -40,9 +38,11 @@
         }
       ]
     ],
-    "experiments": {
-      "typedRoutes": true,
-      "reactCompiler": true
+
+    "extra": {
+      "eas": {
+        "projectId": "0c4212e1-8f87-4fb3-a2c1-23176b1712a9"
+      }
     }
   }
 }
