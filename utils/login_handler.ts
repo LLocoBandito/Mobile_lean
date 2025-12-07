@@ -2,27 +2,54 @@ import {
   createUserWithEmailAndPassword,
   sendPasswordResetEmail,
   signInWithEmailAndPassword,
+  updateProfile, // Diperlukan untuk setting displayName
 } from "firebase/auth";
-import { auth } from "./firebaseConfig";
+import { doc, setDoc } from "firebase/firestore"; // Diperlukan untuk menyimpan ke Firestore
+import { auth, db } from "./firebaseConfig"; // Pastikan 'db' diimpor dari file config Anda
 
 /**
- * Fungsi untuk mendaftarkan user baru dengan Email dan Password.
+ * Fungsi untuk mendaftarkan user baru dengan Email, Password, dan Nama.
+ * Dokumen profil awal akan dibuat di Firestore.
  * @param email Email user
  * @param password Password user
+ * @param name Nama lengkap user (tambahan)
  */
-export const handleRegister = async (email: string, password: string) => {
+export const handleRegister = async (
+  email: string,
+  password: string,
+  name: string // <<< PARAMETER BARU DITAMBAHKAN
+) => {
   try {
+    // 1. Buat User di Firebase Authentication
     const userCredential = await createUserWithEmailAndPassword(
       auth,
       email,
       password
     );
-    console.log("Pendaftaran Berhasil:", userCredential.user.uid);
-    return userCredential.user;
+    const user = userCredential.user;
+
+    // 2. Update Display Name (Opsional, tapi bagus)
+    await updateProfile(user, { displayName: name });
+
+    // 3. Buat Dokumen Profil Awal di Firestore
+    const userDocRef = doc(db, "users", user.uid);
+
+    await setDoc(
+      userDocRef,
+      {
+        uid: user.uid,
+        email: user.email,
+        name: name, // Simpan nama yang diinput
+        createdAt: new Date().toISOString(),
+        photoURL: null, // Setel awal photoURL menjadi null
+      },
+      { merge: true } // Gunakan merge: true
+    );
+
+    console.log("Pendaftaran Berhasil & Dokumen Profil Dibuat:", user.uid);
+    return user;
   } catch (error) {
-    // Log error untuk debugging
     console.error("Firebase Registration Error:", error);
-    // Lempar error agar bisa ditangkap oleh komponen RegisterScreen
     throw error;
   }
 };
@@ -42,9 +69,7 @@ export const handleLogin = async (email: string, password: string) => {
     console.log("Login Berhasil:", userCredential.user.uid);
     return userCredential.user;
   } catch (error) {
-    // Log error untuk debugging
     console.error("Firebase Login Error:", error);
-    // Lempar error agar bisa ditangkap oleh komponen LoginScreen
     throw error;
   }
 };

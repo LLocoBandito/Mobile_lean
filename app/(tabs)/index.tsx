@@ -1,6 +1,4 @@
-// app/index.tsx
 import { Ionicons } from "@expo/vector-icons";
-import { Audio } from "expo-av";
 import * as Haptics from "expo-haptics";
 import * as Location from "expo-location";
 import * as ScreenOrientation from "expo-screen-orientation";
@@ -12,6 +10,7 @@ import {
   Animated,
   Dimensions,
   ScrollView,
+  StatusBar,
   StyleSheet,
   Text,
   TouchableOpacity,
@@ -20,11 +19,10 @@ import {
 import MapView, { Marker, Polyline } from "react-native-maps";
 import { SafeAreaView } from "react-native-safe-area-context";
 import Svg, { Path } from "react-native-svg";
-import { db } from "../../utils/firebaseConfig"; // Pastikan path ini benar
+import { db } from "../../utils/firebaseConfig";
 
 const { width: SCREEN_WIDTH } = Dimensions.get("window");
 
-// --- TIPE DATA ---
 interface LocationPoint {
   latitude: number;
   longitude: number;
@@ -35,76 +33,77 @@ interface LocationPoint {
 }
 
 type ColorScheme = "dark" | "light";
-type Status = "Disconnected" | "Connected" | "Paused";
 type OrientationMode = "Portrait" | "Landscape";
 
-// --- FUNGSI UTAMA KOMPONEN ---
 export default function Home() {
   const [colorScheme, setColorScheme] = useState<ColorScheme>("dark");
-  const [status, setStatus] = useState<Status>("Disconnected");
+  const [orientationMode, setOrientationMode] =
+    useState<OrientationMode>("Portrait");
+  const [status, setStatus] = useState<"Disconnected" | "Connected" | "Paused">(
+    "Disconnected"
+  );
   const [displayPitch, setDisplayPitch] = useState(0);
   const [displayRoll, setDisplayRoll] = useState(0);
   const [currentSpeed, setCurrentSpeed] = useState(0);
   const [isBeeping, setIsBeeping] = useState(false);
-  const [orientationMode, setOrientationMode] =
-    useState<OrientationMode>("Portrait");
 
-  // Hitung ulang dimensi saat orientasi berubah
-  const buttonSize = Dimensions.get("window").width / 2.4;
+  // Akselerasi
+  const [accelTimes, setAccelTimes] = useState({
+    zeroTo60: null as number | null,
+    sixtyTo100: null as number | null,
+    hundredTo150: null as number | null,
+  });
 
-  // Refs untuk nilai yang sering diupdate
   const rollRef = useRef(0);
   const pitchRef = useRef(0);
   const speedAnim = useRef(new Animated.Value(0)).current;
   const rotateAnim = useRef(new Animated.Value(0)).current;
-  const beepIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const beepIntervalRef = useRef<NodeJS.Timeout | null>(null);
+  const lastSpeedRef = useRef(0);
+  const accelStartTimeRef = useRef<number | null>(null);
+  const currentSegmentRef = useRef<"0-60" | "60-100" | "100-150" | null>(null);
 
-  // States untuk monitoring
   const [subscription, setSubscription] = useState<any>(null);
   const [locationWatcher, setLocationWatcher] =
     useState<Location.LocationSubscription | null>(null);
   const [locationPoints, setLocationPoints] = useState<LocationPoint[]>([]);
   const [paused, setPaused] = useState(false);
 
-  // --- DEFINISI WARNA DINAMIS ---
-  const getColors = (mode: ColorScheme) => ({
-    // Backgrounds
-    BG_PRIMARY: mode === "dark" ? "#0F172A" : "#F8F8F8",
-    BG_CARD: mode === "dark" ? "#1F2937" : "#FFFFFF",
-    BG_BUTTON: mode === "dark" ? "#374151" : "#E5E7EB",
-    // Text & Border
-    TEXT_PRIMARY: mode === "dark" ? "#F9FAFB" : "#1F2937",
-    TEXT_SECONDARY: mode === "dark" ? "#9CA3AF" : "#6B7280",
-    BORDER_COLOR: mode === "dark" ? "#334155" : "#D1D5DB",
-    // Accents
-    ACCENT_SAFE: "#10B981", // Green
-    ACCENT_WARNING: "#FBBF24", // Yellow
-    ACCENT_DANGER: "#EF4444", // Red
-    ACCENT_INFO: "#3B82F6", // Blue
-  });
+  // === WARNA DINAMIS (KONTRAST EKSTREM) ===
+  const isDark = colorScheme === "dark";
 
-  const colors = getColors(colorScheme);
+  const colors = {
+    // NIGHT MODE (Dark, Soft)
+    // SUN MODE (Light/Negative Display, Hard Black/White)
 
-  // --- LOGIKA BEEP + VIBRATION ---
-  const playBeep = async () => {
-    try {
-      await Audio.setAudioModeAsync({ playsInSilentModeIOS: true });
-      const { sound } = await Audio.Sound.createAsync(
-        // Coba sound ID yang berbeda jika 1005 tidak bekerja
-        { uri: "system_sound_id://1005" },
-        { shouldPlay: true }
-      );
-      setTimeout(() => sound.unloadAsync(), 500);
-      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
-    } catch {
-      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
-    }
+    BG_PRIMARY: isDark ? "#0F172A" : "#000000",
+    BG_CARD: isDark
+      ? "rgba(30, 41, 59, 0.95)" // Dark: elemen gelap transparan
+      : "#111111", // Light (Negative): elemen sangat gelap solid
+
+    TEXT_PRIMARY: isDark ? "#E2E8F0" : "#FFFFFF", // Dark: Putih kebiruan, Light: Putih murni
+    TEXT_SECONDARY: isDark ? "#94A3B8" : "#AAAAAA", // Dark: Abu-abu, Light: Abu-abu terang
+
+    BORDER: isDark ? "#475569" : "#333333", // Batas yang berbeda kecerahannya
+
+    // Warna Aksen tetap cerah dan memiliki kontras tinggi di kedua mode
+    ACCENT_SAFE: "#10B981",
+    ACCENT_WARNING: "#F59E0B",
+    ACCENT_DANGER: "#EF4444",
+    ACCENT_INFO: "#3B82F6",
   };
 
+  // === Implementasi fungsi lainnya tetap sama ===
+
+  // === BEEP & HAPTICS ===
   useEffect(() => {
     if (currentSpeed > 120 && !isBeeping) {
       setIsBeeping(true);
-      beepIntervalRef.current = setInterval(playBeep, 1000);
+      beepIntervalRef.current = setInterval(
+        () =>
+          Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning),
+        800
+      );
     } else if (currentSpeed <= 120 && isBeeping) {
       setIsBeeping(false);
       if (beepIntervalRef.current) clearInterval(beepIntervalRef.current);
@@ -114,72 +113,104 @@ export default function Home() {
     };
   }, [currentSpeed]);
 
-  // --- LOGIKA MONITORING (DENGAN PENYESUAIAN ORIENTASI) ---
+  // === MONITORING LOGIC DENGAN AKSELERASI ===
   const activateMonitoring = async () => {
-    // 1. Izin Lokasi
-    const { status: locStatus } =
+    const { status: permStatus } =
       await Location.requestForegroundPermissionsAsync();
-    if (locStatus !== "granted") {
+    if (permStatus !== "granted") {
       Alert.alert("Izin Ditolak", "Lokasi diperlukan untuk monitoring!");
       return;
     }
 
-    // 2. Location Watcher
     const watcher = await Location.watchPositionAsync(
       {
-        accuracy: Location.Accuracy.Highest,
+        accuracy: Location.Accuracy.BestForNavigation,
         timeInterval: 1000,
-        distanceInterval: 1,
+        distanceInterval: 3,
       },
       (loc) => {
-        const speedKmh = loc.coords.speed
-          ? Math.round(loc.coords.speed * 3.6)
-          : 0;
-        setCurrentSpeed(speedKmh);
+        const speed = loc.coords.speed ? Math.round(loc.coords.speed * 3.6) : 0;
+        const prevSpeed = lastSpeedRef.current;
+        setCurrentSpeed(speed);
+        lastSpeedRef.current = speed;
+
         Animated.timing(speedAnim, {
-          toValue: Math.min(speedKmh, 145),
-          duration: 300,
+          toValue: Math.min(speed, 160),
+          duration: 400,
           useNativeDriver: false,
         }).start();
 
-        const newPoint: LocationPoint = {
-          latitude: loc.coords.latitude,
-          longitude: loc.coords.longitude,
-          timestamp: new Date().toISOString(),
-          roll: rollRef.current,
-          pitch: pitchRef.current,
-          speed: speedKmh,
-        };
-        setLocationPoints((prev) => [...prev, newPoint]);
+        if (status === "Connected") {
+          if (
+            speed > 10 &&
+            !accelStartTimeRef.current &&
+            !accelTimes.zeroTo60
+          ) {
+            accelStartTimeRef.current = Date.now();
+            currentSegmentRef.current = "0-60";
+          }
+
+          if (prevSpeed < 60 && speed >= 60 && !accelTimes.zeroTo60) {
+            const time = accelStartTimeRef.current
+              ? (Date.now() - accelStartTimeRef.current) / 1000
+              : null;
+            setAccelTimes((prev) => ({ ...prev, zeroTo60: time || 0 }));
+            accelStartTimeRef.current = Date.now();
+            currentSegmentRef.current = "60-100";
+          } else if (
+            prevSpeed < 100 &&
+            speed >= 100 &&
+            accelTimes.zeroTo60 &&
+            !accelTimes.sixtyTo100
+          ) {
+            const time = accelStartTimeRef.current
+              ? (Date.now() - accelStartTimeRef.current) / 1000
+              : null;
+            setAccelTimes((prev) => ({ ...prev, sixtyTo100: time || 0 }));
+            accelStartTimeRef.current = Date.now();
+            currentSegmentRef.current = "100-150";
+          } else if (
+            prevSpeed < 150 &&
+            speed >= 150 &&
+            accelTimes.sixtyTo100 &&
+            !accelTimes.hundredTo150
+          ) {
+            const time = accelStartTimeRef.current
+              ? (Date.now() - accelStartTimeRef.current) / 1000
+              : null;
+            setAccelTimes((prev) => ({ ...prev, hundredTo150: time || 0 }));
+            currentSegmentRef.current = null;
+          }
+        }
+
+        setLocationPoints((prev) => [
+          ...prev,
+          {
+            latitude: loc.coords.latitude,
+            longitude: loc.coords.longitude,
+            timestamp: new Date().toISOString(),
+            roll: rollRef.current,
+            pitch: pitchRef.current,
+            speed,
+          },
+        ]);
       }
     );
     setLocationWatcher(watcher);
 
-    // 3. Accelerometer Listener (DENGAN PENYESUAIAN RUMUS)
     Accelerometer.setUpdateInterval(100);
     const sub = Accelerometer.addListener(({ x, y, z }) => {
       let rollRad: number, pitchRad: number;
-
       if (orientationMode === "Portrait") {
-        // ✅ PORTRAIT: Roll dari X, Pitch dari Y
-        // Roll: Kemiringan samping
         rollRad = Math.atan2(-x, z);
-        // Pitch: Kemiringan maju/mundur
         pitchRad = Math.atan2(y, Math.sqrt(x * x + z * z));
       } else {
-        // 🛠️ LANDSCAPE: Penyesuaian sumbu untuk LANDSCAPE_RIGHT (90 derajat kanan)
-        // Roll: Sumbu yang bertanggung jawab untuk kemiringan lateral saat ini adalah Y.
         rollRad = Math.atan2(y, z);
-
-        // Pitch: Sumbu yang bertanggung jawab untuk nungging/mendongak saat ini adalah X.
-        // Perlu tanda negatif agar nilai Pitch tetap logis.
         pitchRad = Math.atan2(-x, Math.sqrt(y * y + z * z));
       }
 
       const rollDeg = (rollRad * 180) / Math.PI;
       const pitchDeg = (pitchRad * 180) / Math.PI;
-
-      // Batasi Roll pada nilai yang masuk akal
       const clampedRoll = Math.max(-50, Math.min(50, rollDeg));
 
       rollRef.current = Math.round(clampedRoll);
@@ -197,12 +228,16 @@ export default function Home() {
   };
 
   const startMonitoring = async () => {
-    if (subscription) subscription.remove();
-    if (locationWatcher) locationWatcher.remove();
+    if (subscription || locationWatcher) stopMonitoring();
     setLocationPoints([]);
     setCurrentSpeed(0);
     setDisplayRoll(0);
     setDisplayPitch(0);
+    setAccelTimes({ zeroTo60: null, sixtyTo100: null, hundredTo150: null });
+    accelStartTimeRef.current = null;
+    currentSegmentRef.current = null;
+    lastSpeedRef.current = 0;
+
     await activateMonitoring();
     setStatus("Connected");
     setPaused(false);
@@ -214,14 +249,8 @@ export default function Home() {
     setSubscription(null);
     setLocationWatcher(null);
     setStatus("Disconnected");
+    setLocationPoints([]);
     setCurrentSpeed(0);
-    setDisplayRoll(0);
-    setDisplayPitch(0);
-    Animated.timing(rotateAnim, {
-      toValue: 0,
-      duration: 400,
-      useNativeDriver: true,
-    }).start();
   };
 
   const togglePause = async () => {
@@ -232,67 +261,36 @@ export default function Home() {
     } else {
       subscription?.remove();
       locationWatcher?.remove();
-      setSubscription(null);
-      setLocationWatcher(null);
       setPaused(true);
       setStatus("Paused");
     }
   };
 
   const saveData = async () => {
-    if (locationPoints.length === 0) {
-      Alert.alert("Kosong", "Tidak ada data untuk disimpan!");
+    if (locationPoints.length < 1) {
+      Alert.alert("Data Kurang", "Minimal 1 titik GPS!");
       return;
     }
     stopMonitoring();
 
-    let sumR = 0,
-      sumL = 0,
-      cntR = 0,
-      cntL = 0,
-      maxR = 0,
-      maxL = 0,
-      sumP = 0;
-    locationPoints.forEach((p) => {
-      sumP += p.pitch;
-      if (p.roll > 0) {
-        sumR += p.roll;
-        cntR++;
-        if (p.roll > maxR) maxR = p.roll;
-      } else if (p.roll < 0) {
-        const abs = Math.abs(p.roll);
-        sumL += abs;
-        cntL++;
-        if (abs > maxL) maxL = abs;
-      }
-    });
-
     try {
       await addDoc(collection(db, "monitoring_sessions"), {
-        sessionName: `Session_${new Date()
-          .toISOString()
-          .replace(/[:.]/g, "_")}`,
+        sessionName: `Lean Session ${new Date().toLocaleString("id-ID")}`,
         totalPoints: locationPoints.length,
         path: locationPoints,
-        maxRollRight: Math.round(maxR),
-        maxRollLeft: Math.round(maxL),
-        avgRollRight: cntR > 0 ? (sumR / cntR).toFixed(1) : "0",
-        avgRollLeft: cntL > 0 ? (sumL / cntL).toFixed(1) : "0",
-        avgPitch: (sumP / locationPoints.length).toFixed(1),
         startPoint: locationPoints[0],
         endPoint: locationPoints[locationPoints.length - 1],
-        status: "Completed",
+        accel_0_60: accelTimes.zeroTo60,
+        accel_60_100: accelTimes.sixtyTo100,
+        accel_100_150: accelTimes.hundredTo150,
         createdAt: new Date().toISOString(),
-        orientation: orientationMode,
       });
-      Alert.alert("Sukses!", "Data sesi berhasil disimpan ke Firebase!");
-      setLocationPoints([]);
+      Alert.alert("Sukses!", "Data + waktu akselerasi tersimpan!");
     } catch (e: any) {
       Alert.alert("Error", e.message);
     }
   };
 
-  // --- FUNGSI UI PENDUKUNG ---
   const rotation = rotateAnim.interpolate({
     inputRange: [-50, 50],
     outputRange: ["-50deg", "50deg"],
@@ -312,443 +310,525 @@ export default function Home() {
     } ${endX} ${endY}`;
   };
 
-  const getSpeedBarColor = () => {
-    if (currentSpeed < 60) return colors.ACCENT_SAFE;
-    if (currentSpeed < 100) return colors.ACCENT_WARNING;
-    return colors.ACCENT_DANGER;
+  const getSpeedBarColor = () =>
+    currentSpeed < 60
+      ? colors.ACCENT_SAFE
+      : currentSpeed < 100
+      ? colors.ACCENT_WARNING
+      : colors.ACCENT_DANGER;
+  const getRollPathColor = () =>
+    displayRoll === 0
+      ? colors.TEXT_SECONDARY
+      : displayRoll > 0
+      ? colors.ACCENT_SAFE
+      : colors.ACCENT_DANGER;
+
+  const toggleTheme = () => {
+    setColorScheme((prev) => (prev === "dark" ? "light" : "dark"));
+  };
+  const toggleOrientation = async () => {
+    if (orientationMode === "Portrait") {
+      await ScreenOrientation.lockAsync(
+        ScreenOrientation.OrientationLock.LANDSCAPE_RIGHT
+      );
+      setOrientationMode("Landscape");
+    } else {
+      await ScreenOrientation.lockAsync(
+        ScreenOrientation.OrientationLock.PORTRAIT_UP
+      );
+      setOrientationMode("Portrait");
+    }
+    if (status === "Connected" || status === "Paused") {
+      stopMonitoring();
+      setTimeout(startMonitoring, 500);
+    }
   };
 
-  const getRollPathColor = () => {
-    if (displayRoll === 0) return colors.TEXT_SECONDARY;
-    if (displayRoll > 0) return colors.ACCENT_SAFE;
-    return colors.ACCENT_DANGER;
-  };
-
-  // --- KOMPONEN SWITCH TEMA ---
-  const ThemeSwitcher = () => (
-    <TouchableOpacity
-      onPress={() => setColorScheme(colorScheme === "dark" ? "light" : "dark")}
-      style={styles.themeSwitcher}
-    >
-      <Ionicons
-        name={colorScheme === "dark" ? "sunny-outline" : "moon-outline"}
-        size={24}
-        color={colors.TEXT_PRIMARY}
-      />
-    </TouchableOpacity>
-  );
-
-  // --- KOMPONEN SWITCH ORIENTASI BARU ---
-  const LandscapeToggle = () => {
-    const toggleOrientation = async () => {
-      if (orientationMode === "Portrait") {
-        await ScreenOrientation.lockAsync(
-          ScreenOrientation.OrientationLock.LANDSCAPE_RIGHT
-        );
-        setOrientationMode("Landscape");
-      } else {
-        await ScreenOrientation.lockAsync(
-          ScreenOrientation.OrientationLock.PORTRAIT_UP
-        );
-        setOrientationMode("Portrait");
-      }
-      // Hentikan dan mulai ulang monitoring agar accelerometer listener menggunakan formula baru
-      if (status === "Connected" || status === "Paused") {
-        stopMonitoring();
-        setTimeout(startMonitoring, 500);
-      }
-    };
-
-    return (
-      <TouchableOpacity
-        onPress={toggleOrientation}
-        style={styles.themeSwitcher}
-      >
-        <Ionicons
-          name={
-            orientationMode === "Portrait"
-              ? "phone-portrait-outline"
-              : "phone-landscape-outline"
-          }
-          size={24}
-          color={
-            orientationMode === "Portrait"
-              ? colors.ACCENT_SAFE
-              : colors.ACCENT_INFO
-          }
-        />
-      </TouchableOpacity>
-    );
-  };
-
-  // --- RENDER UTAMA ---
   return (
-    <SafeAreaView
-      style={[styles.safeArea, { backgroundColor: colors.BG_PRIMARY }]}
-    >
-      <ScrollView
-        contentContainerStyle={[
-          styles.container,
-          { backgroundColor: colors.BG_PRIMARY },
-        ]}
-      >
-        {/* HEADER & STATUS */}
-        <View style={styles.header}>
-          <Text style={[styles.title, { color: colors.TEXT_PRIMARY }]}>
-            PrimeLean Monitor
-          </Text>
-          <View style={{ flexDirection: "row", alignItems: "center", gap: 10 }}>
-            <LandscapeToggle />
-            <ThemeSwitcher />
+    <SafeAreaView style={{ flex: 1, backgroundColor: colors.BG_PRIMARY }}>
+      {/* StatusBar selalu light-content karena BG selalu gelap (atau sangat gelap) */}
+      <StatusBar
+        barStyle={"light-content"}
+        backgroundColor="transparent"
+        translucent
+      />
+
+      <View style={{ flex: 1 }}>
+        <View
+          style={{
+            ...StyleSheet.absoluteFillObject,
+            // Overlay tetap gelap di kedua mode
+            backgroundColor: isDark
+              ? "rgba(30, 41, 59, 0.4)"
+              : "rgba(0, 0, 0, 0.4)",
+          }}
+          pointerEvents="none"
+        />
+
+        <ScrollView showsVerticalScrollIndicator={false}>
+          {/* Header */}
+          <View style={styles.header}>
+            <Text style={{ ...styles.title, color: colors.TEXT_PRIMARY }}>
+              PrimeLean Monitor
+            </Text>
             <View
-              style={[
-                styles.statusBadge,
-                {
-                  backgroundColor:
-                    status === "Connected"
-                      ? colors.ACCENT_SAFE
-                      : status === "Paused"
-                      ? colors.ACCENT_WARNING
-                      : colors.ACCENT_DANGER,
-                },
-              ]}
+              style={{ flexDirection: "row", gap: 16, alignItems: "center" }}
             >
-              <Text style={styles.statusText}>{status}</Text>
+              <TouchableOpacity
+                onPress={toggleOrientation}
+                style={[
+                  styles.iconBtn,
+                  {
+                    backgroundColor: isDark
+                      ? "rgba(255,255,255,0.1)"
+                      : "rgba(255,255,255,0.1)",
+                  },
+                ]}
+              >
+                <Ionicons
+                  name={
+                    orientationMode === "Portrait"
+                      ? "phone-portrait"
+                      : "phone-landscape"
+                  }
+                  size={28}
+                  color={colors.TEXT_PRIMARY}
+                />
+              </TouchableOpacity>
+              <TouchableOpacity
+                onPress={toggleTheme}
+                style={[
+                  styles.iconBtn,
+                  {
+                    backgroundColor: isDark
+                      ? "rgba(255,255,255,0.1)"
+                      : "rgba(255,255,255,0.1)",
+                  },
+                ]}
+              >
+                <Ionicons
+                  name={colorScheme === "dark" ? "moon" : "sunny"}
+                  size={28}
+                  color={colors.TEXT_PRIMARY}
+                />
+              </TouchableOpacity>
+              <View
+                style={[
+                  styles.statusBadge,
+                  {
+                    backgroundColor:
+                      status === "Connected"
+                        ? colors.ACCENT_SAFE
+                        : status === "Paused"
+                        ? colors.ACCENT_WARNING
+                        : colors.ACCENT_DANGER,
+                  },
+                ]}
+              >
+                <Text style={styles.statusText}>{status}</Text>
+              </View>
             </View>
           </View>
-        </View>
 
-        {/* WARNING BANNER */}
-        {currentSpeed > 120 && (
-          <View style={styles.warningBanner}>
-            <Ionicons name="warning" size={28} color="#fff" />
-            <Text style={styles.warningText}>KECEPATAN BERLEBIH!</Text>
-          </View>
-        )}
-
-        {/* 1. SPEEDOMETER */}
-        <View style={[styles.card, { backgroundColor: colors.BG_CARD }]}>
-          <View style={styles.speedHeader}>
-            <Ionicons
-              name="speedometer"
-              size={30}
-              color={colors.ACCENT_WARNING}
-            />
-            <Text style={[styles.speedText, { color: colors.ACCENT_WARNING }]}>
-              {currentSpeed} km/h
-            </Text>
-          </View>
+          {/* Speedometer */}
           <View
-            style={[styles.speedBarBg, { backgroundColor: colors.BG_BUTTON }]}
-          >
-            <Animated.View
-              style={[
-                styles.speedBarFill,
-                {
-                  width: speedAnim.interpolate({
-                    inputRange: [0, 145],
-                    outputRange: ["0%", "100%"],
-                  }),
-                  backgroundColor: getSpeedBarColor(),
-                },
-              ]}
-            />
-          </View>
-          <View style={styles.speedLabels}>
-            <Text style={[styles.speedLabel, { color: colors.TEXT_SECONDARY }]}>
-              0
-            </Text>
-            <Text style={[styles.speedLabel, { color: colors.TEXT_SECONDARY }]}>
-              145 km/h
-            </Text>
-          </View>
-        </View>
-
-        {/* 2. ROLL & PITCH VISUALIZATION */}
-        <View
-          style={[
-            styles.card,
-            styles.visualContainer,
-            { backgroundColor: colors.BG_CARD },
-          ]}
-        >
-          <Text
-            style={[styles.statusDirection, { color: colors.TEXT_PRIMARY }]}
-          >
-            Sudut Kemiringan (Roll)
-          </Text>
-          <Svg height="200" width="300">
-            <Path
-              d="M30 150 A120 120 0 0 1 270 150"
-              stroke={colors.BORDER_COLOR}
-              strokeWidth="10"
-              fill="none"
-            />
-            <Path
-              d={getArcPath(displayRoll)}
-              stroke={getRollPathColor()}
-              strokeWidth="10"
-              fill="none"
-            />
-          </Svg>
-          <Text style={[styles.angleText, { color: colors.TEXT_PRIMARY }]}>
-            {Math.abs(displayRoll)}°
-          </Text>
-          <Animated.View
             style={[
-              styles.bikeContainer,
-              { transform: [{ rotate: rotation }] },
+              styles.speedCard,
+              { backgroundColor: colors.BG_CARD, borderColor: colors.BORDER },
             ]}
           >
+            <Text style={{ color: colors.TEXT_SECONDARY, fontSize: 18 }}>
+              KECEPATAN
+            </Text>
+            <Text
+              style={{
+                color: colors.TEXT_PRIMARY,
+                fontSize: 90,
+                fontWeight: "900",
+              }}
+            >
+              {currentSpeed}
+            </Text>
+            <Text
+              style={{
+                color: colors.ACCENT_INFO,
+                fontSize: 24,
+                fontWeight: "bold",
+              }}
+            >
+              km/h
+            </Text>
             <View
-              style={[styles.bike, { backgroundColor: colors.TEXT_PRIMARY }]}
-            />
-          </Animated.View>
-          <Text
+              style={[
+                styles.speedBarContainer,
+                { backgroundColor: isDark ? "#1E293B" : "#111111" },
+              ]}
+            >
+              <Animated.View
+                style={[
+                  styles.speedBar,
+                  {
+                    width: speedAnim.interpolate({
+                      inputRange: [0, 160],
+                      outputRange: ["0%", "100%"],
+                    }),
+                    backgroundColor: getSpeedBarColor(),
+                  },
+                ]}
+              />
+            </View>
+          </View>
+
+          {/* Waktu Akselerasi */}
+          <View
             style={[
-              styles.statusDirection,
-              { marginTop: 20, color: colors.TEXT_SECONDARY },
+              styles.accelCard,
+              { backgroundColor: colors.BG_CARD, borderColor: colors.BORDER },
             ]}
           >
-            {displayRoll === 0
-              ? "Center"
-              : displayRoll > 0
-              ? "Tilting Right"
-              : "Tilting Left"}
-          </Text>
-          <Text style={[styles.pitchText, { color: colors.TEXT_SECONDARY }]}>
-            Pitch: {displayPitch}°
-          </Text>
-        </View>
-
-        {/* 3. MAP VIEW */}
-        <View
-          style={[
-            styles.card,
-            styles.mapContainer,
-            { backgroundColor: colors.BG_CARD },
-          ]}
-        >
-          <MapView
-            style={{ flex: 1, width: "100%" }}
-            region={{
-              latitude: locationPoints.at(-1)?.latitude || -8.65,
-              longitude: locationPoints.at(-1)?.longitude || 115.22,
-              latitudeDelta: 0.01,
-              longitudeDelta: 0.01,
-            }}
-          >
-            {locationPoints.length > 0 && (
-              <>
-                <Polyline
-                  coordinates={locationPoints}
-                  strokeWidth={4}
-                  strokeColor={colors.ACCENT_INFO}
-                />
-                <Marker
-                  coordinate={locationPoints[0]}
-                  title="Start"
-                  pinColor="green"
-                />
-                <Marker
-                  coordinate={locationPoints.at(-1)!}
-                  title="Now"
-                  pinColor="red"
-                />
-              </>
-            )}
-          </MapView>
-        </View>
-
-        {/* 4. CONTROL BUTTONS */}
-        <View style={styles.controlButtons}>
-          {/* Tombol Start */}
-          <TouchableOpacity
-            style={[
-              styles.mainBtn,
-              {
-                backgroundColor:
-                  status === "Connected"
-                    ? colors.BG_BUTTON
-                    : colors.ACCENT_SAFE,
-                width: buttonSize,
-              },
-            ]}
-            onPress={startMonitoring}
-            disabled={status === "Connected"}
-          >
-            <Ionicons name="play" size={24} color="#fff" />
-            <Text style={styles.mainBtnText}>Start</Text>
-          </TouchableOpacity>
-
-          {/* Tombol Pause/Lanjut */}
-          <TouchableOpacity
-            style={[
-              styles.mainBtn,
-              {
-                backgroundColor:
-                  !paused && status !== "Connected"
-                    ? colors.BG_BUTTON
-                    : colors.ACCENT_WARNING,
-                width: buttonSize,
-              },
-            ]}
-            onPress={togglePause}
-            disabled={!paused && status !== "Connected"}
-          >
-            <Ionicons name={paused ? "play" : "pause"} size={24} color="#fff" />
-            <Text style={styles.mainBtnText}>
-              {paused ? "Lanjut" : "Pause"}
+            <Text style={{ ...styles.cardTitle, color: colors.TEXT_PRIMARY }}>
+              Waktu Akselerasi
             </Text>
-          </TouchableOpacity>
+            <View style={styles.accelRow}>
+              <Text
+                style={[styles.accelLabel, { color: colors.TEXT_SECONDARY }]}
+              >
+                0 → 60 km/h
+              </Text>
+              <Text
+                style={[
+                  styles.accelValue,
+                  {
+                    color: accelTimes.zeroTo60
+                      ? "#10B981"
+                      : colors.TEXT_SECONDARY,
+                  },
+                ]}
+              >
+                {accelTimes.zeroTo60 !== null
+                  ? `${accelTimes.zeroTo60.toFixed(2)}s`
+                  : "-"}
+              </Text>
+            </View>
+            <View style={styles.accelRow}>
+              <Text
+                style={[styles.accelLabel, { color: colors.TEXT_SECONDARY }]}
+              >
+                60 → 100 km/h
+              </Text>
+              <Text
+                style={[
+                  styles.accelValue,
+                  {
+                    color: accelTimes.sixtyTo100
+                      ? "#3B82F6"
+                      : colors.TEXT_SECONDARY,
+                  },
+                ]}
+              >
+                {accelTimes.sixtyTo100 !== null
+                  ? `${accelTimes.sixtyTo100.toFixed(2)}s`
+                  : "-"}
+              </Text>
+            </View>
+            <View style={styles.accelRow}>
+              <Text
+                style={[styles.accelLabel, { color: colors.TEXT_SECONDARY }]}
+              >
+                100 → 150 km/h
+              </Text>
+              <Text
+                style={[
+                  styles.accelValue,
+                  {
+                    color: accelTimes.hundredTo150
+                      ? "#EF4444"
+                      : colors.TEXT_SECONDARY,
+                  },
+                ]}
+              >
+                {accelTimes.hundredTo150 !== null
+                  ? `${accelTimes.hundredTo150.toFixed(2)}s`
+                  : "-"}
+              </Text>
+            </View>
+          </View>
 
-          {/* Tombol Simpan */}
-          <TouchableOpacity
-            style={[
-              styles.mainBtn,
-              {
-                backgroundColor:
+          {/* Horizontal Scroll: Roll + Map */}
+          <ScrollView
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            pagingEnabled
+            style={{ marginVertical: 20 }}
+          >
+            {/* Roll */}
+            <View
+              style={[
+                styles.rollCard,
+                { backgroundColor: colors.BG_CARD, borderColor: colors.BORDER },
+              ]}
+            >
+              <Text style={{ ...styles.cardTitle, color: colors.TEXT_PRIMARY }}>
+                Sudut Kemiringan (Roll)
+              </Text>
+              <Svg height="200" width="300">
+                <Path
+                  d="M30 150 A120 120 0 0 1 270 150"
+                  stroke={colors.BORDER}
+                  strokeWidth="10"
+                  fill="none"
+                />
+                <Path
+                  d={getArcPath(displayRoll)}
+                  stroke={getRollPathColor()}
+                  strokeWidth="10"
+                  fill="none"
+                />
+              </Svg>
+              <Text style={{ ...styles.angleText, color: colors.TEXT_PRIMARY }}>
+                {Math.abs(displayRoll)}°
+              </Text>
+              <Animated.View
+                style={[
+                  styles.bikeContainer,
+                  { transform: [{ rotate: rotation }] },
+                ]}
+              >
+                <View
+                  style={[
+                    styles.bike,
+                    { backgroundColor: colors.TEXT_PRIMARY },
+                  ]}
+                />
+              </Animated.View>
+              <Text
+                style={{
+                  ...styles.statusDirection,
+                  color: colors.TEXT_SECONDARY,
+                  marginTop: 20,
+                }}
+              >
+                {displayRoll === 0
+                  ? "Center"
+                  : displayRoll > 0
+                  ? "Tilting Right"
+                  : "Tilting Left"}
+              </Text>
+              <Text style={{ color: colors.TEXT_SECONDARY }}>
+                Pitch: {displayPitch}°
+              </Text>
+            </View>
+
+            {/* Map */}
+            <View
+              style={[
+                styles.mapCard,
+                { backgroundColor: colors.BG_CARD, borderColor: colors.BORDER },
+              ]}
+            >
+              <Text style={{ ...styles.cardTitle, color: colors.TEXT_PRIMARY }}>
+                Peta Perjalanan
+              </Text>
+              <MapView
+                // MapView tidak dapat diubah warnanya menjadi negative display dengan mudah
+                // Jadi, kita biarkan default atau menggunakan mapStyle yang gelap
+                style={styles.map}
+                region={
                   locationPoints.length > 0
-                    ? colors.ACCENT_INFO
-                    : colors.BG_BUTTON,
-                width: buttonSize,
-              },
-            ]}
-            onPress={saveData}
-            disabled={locationPoints.length === 0}
-          >
-            <Ionicons name="save" size={24} color="#fff" />
-            <Text style={styles.mainBtnText}>Simpan</Text>
-          </TouchableOpacity>
+                    ? {
+                        latitude:
+                          locationPoints[locationPoints.length - 1].latitude,
+                        longitude:
+                          locationPoints[locationPoints.length - 1].longitude,
+                        latitudeDelta: 0.01,
+                        longitudeDelta: 0.01,
+                      }
+                    : undefined
+                }
+              >
+                {locationPoints.length > 0 && (
+                  <>
+                    <Polyline
+                      coordinates={locationPoints}
+                      strokeWidth={6}
+                      strokeColor={colors.ACCENT_INFO}
+                    />
+                    <Marker
+                      coordinate={locationPoints[0]}
+                      title="Start"
+                      pinColor="#10B981"
+                    />
+                    <Marker
+                      coordinate={locationPoints[locationPoints.length - 1]}
+                      title="Sekarang"
+                      pinColor="#EF4444"
+                    />
+                  </>
+                )}
+              </MapView>
+              <Text
+                style={{
+                  color: colors.TEXT_SECONDARY,
+                  textAlign: "center",
+                  marginTop: 12,
+                }}
+              >
+                Titik: {locationPoints.length}
+              </Text>
+            </View>
+          </ScrollView>
 
-          {/* Tombol Stop */}
-          <TouchableOpacity
-            style={[
-              styles.mainBtn,
-              { backgroundColor: colors.ACCENT_DANGER, width: buttonSize },
-            ]}
-            onPress={stopMonitoring}
-          >
-            <Ionicons name="stop" size={24} color="#fff" />
-            <Text style={styles.mainBtnText}>Stop</Text>
-          </TouchableOpacity>
-        </View>
-      </ScrollView>
+          {/* Control Buttons */}
+          <View style={styles.buttonGrid}>
+            <TouchableOpacity
+              style={[styles.controlBtn, styles.startBtn]}
+              onPress={startMonitoring}
+              disabled={status === "Connected"}
+            >
+              <Ionicons name="play-circle" size={40} color="#fff" />
+              <Text style={styles.btnText}>MULAI</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={[styles.controlBtn, styles.pauseBtn]}
+              onPress={togglePause}
+              disabled={status === "Disconnected"}
+            >
+              <Ionicons
+                name={paused ? "play-circle" : "pause-circle"}
+                size={40}
+                color="#fff"
+              />
+              <Text style={styles.btnText}>{paused ? "LANJUT" : "PAUSE"}</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={[styles.controlBtn, styles.saveBtn]}
+              onPress={saveData}
+              disabled={locationPoints.length === 0}
+            >
+              <Ionicons name="cloud-upload" size={40} color="#fff" />
+              <Text style={styles.btnText}>SIMPAN</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={[styles.controlBtn, styles.stopBtn]}
+              onPress={stopMonitoring}
+            >
+              <Ionicons name="stop-circle" size={40} color="#fff" />
+              <Text style={styles.btnText}>STOP</Text>
+            </TouchableOpacity>
+          </View>
+        </ScrollView>
+      </View>
     </SafeAreaView>
   );
 }
 
-// --- STYLES (Dinamis dan Static) ---
 const styles = StyleSheet.create({
-  safeArea: { flex: 1 },
-  container: { flexGrow: 1, padding: 20 },
-  card: {
-    borderRadius: 16,
-    padding: 20,
-    marginBottom: 20,
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.1,
-    shadowRadius: 5,
-    elevation: 8,
-  },
-
-  // Header & Status
   header: {
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "center",
-    marginBottom: 15,
+    padding: 20,
+    paddingTop: 50,
   },
-  title: { fontSize: 28, fontWeight: "800" },
-  statusBadge: { borderRadius: 12, paddingVertical: 8, paddingHorizontal: 16 },
-  statusText: { color: "#fff", fontWeight: "700" },
-  themeSwitcher: {
-    padding: 5,
-    borderRadius: 20,
+  title: { fontSize: 30, fontWeight: "900" },
+  iconBtn: {
+    padding: 10,
+    borderRadius: 16,
   },
+  statusBadge: { paddingHorizontal: 20, paddingVertical: 10, borderRadius: 30 },
+  statusText: { color: "#fff", fontWeight: "bold", fontSize: 14 },
 
-  // Warning
-  warningBanner: {
-    flexDirection: "row",
+  speedCard: {
+    margin: 20,
+    borderRadius: 32,
+    padding: 32,
     alignItems: "center",
-    justifyContent: "center",
-    backgroundColor: "#DC2626",
-    padding: 14,
-    borderRadius: 12,
-    gap: 12,
-    marginBottom: 20,
+    borderWidth: 1,
+    shadowColor: "#000",
+    shadowOpacity: 0.7,
+    shadowRadius: 30,
+    elevation: 25,
   },
-  warningText: { color: "#fff", fontSize: 19, fontWeight: "800" },
-
-  // Speedometer
-  speedHeader: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 12,
-    marginBottom: 10,
-  },
-  speedText: { fontSize: 48, fontWeight: "900" },
-  speedBarBg: {
-    height: 40,
-    borderRadius: 20,
+  speedBarContainer: {
+    width: "100%",
+    height: 30,
+    borderRadius: 15,
     overflow: "hidden",
-    borderWidth: 2,
+    marginTop: 24,
   },
-  speedBarFill: { height: "100%", borderRadius: 18 },
-  speedLabels: {
+  speedBar: { height: "100%", borderRadius: 15 },
+
+  accelCard: {
+    marginHorizontal: 20,
+    marginVertical: 10,
+    borderRadius: 28,
+    padding: 24,
+    borderWidth: 1,
+    shadowColor: "#000",
+    shadowOpacity: 0.7,
+    shadowRadius: 30,
+    elevation: 25,
+  },
+  accelRow: {
     flexDirection: "row",
     justifyContent: "space-between",
-    marginTop: 8,
+    marginVertical: 8,
   },
-  speedLabel: { fontSize: 14 },
+  accelLabel: { fontSize: 16 },
+  accelValue: { color: "#F8FAFC", fontSize: 18, fontWeight: "bold" },
 
-  // Roll & Pitch Visual
-  visualContainer: {
+  rollCard: {
+    width: SCREEN_WIDTH - 40,
+    marginHorizontal: 20,
+    borderRadius: 32,
+    padding: 30,
     alignItems: "center",
+    borderWidth: 1,
+    shadowColor: "#000",
+    shadowOpacity: 0.7,
+    shadowRadius: 30,
+    elevation: 25,
   },
-  angleText: {
-    fontSize: 52,
-    fontWeight: "900",
-    position: "absolute",
-    top: 60,
+  mapCard: {
+    width: SCREEN_WIDTH - 40,
+    marginHorizontal: 20,
+    borderRadius: 32,
+    padding: 20,
+    borderWidth: 1,
+    shadowColor: "#000",
+    shadowOpacity: 0.7,
+    shadowRadius: 30,
+    elevation: 25,
   },
+  cardTitle: { fontSize: 24, fontWeight: "bold", marginBottom: 16 },
+  angleText: { fontSize: 52, fontWeight: "900", position: "absolute", top: 60 },
   bikeContainer: { marginTop: -75 },
-  bike: {
-    width: 46,
-    height: 104,
-    borderRadius: 23,
-  },
-  statusDirection: {
-    fontSize: 18,
-    fontWeight: "600",
-    marginTop: 10,
-  },
-  pitchText: { fontSize: 16, marginTop: 8 },
+  bike: { width: 46, height: 104, borderRadius: 23 },
+  statusDirection: { fontSize: 18, fontWeight: "600", marginTop: 10 },
+  map: { width: "100%", height: 340, borderRadius: 24 },
 
-  // Map
-  mapContainer: { height: 300, padding: 0, overflow: "hidden" },
-
-  // Controls
-  controlButtons: {
+  buttonGrid: {
     flexDirection: "row",
     flexWrap: "wrap",
     justifyContent: "center",
-    gap: 16,
-    marginVertical: 10,
+    gap: 20,
+    padding: 30,
+    paddingBottom: 80,
   },
-  mainBtn: {
-    flexDirection: "row",
-    alignItems: "center",
+  controlBtn: {
+    width: 110,
+    height: 110,
+    borderRadius: 30,
     justifyContent: "center",
-    gap: 10,
-    paddingVertical: 18,
-    borderRadius: 16,
+    alignItems: "center",
     shadowColor: "#000",
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.2,
-    shadowRadius: 3,
-    elevation: 4,
+    shadowOpacity: 0.8,
+    shadowRadius: 30,
+    elevation: 25,
   },
-  mainBtnText: { color: "#fff", fontWeight: "700", fontSize: 17 },
+  startBtn: { backgroundColor: "#10B981" },
+  pauseBtn: { backgroundColor: "#F59E0B" },
+  saveBtn: { backgroundColor: "#3B82F6" },
+  stopBtn: { backgroundColor: "#EF4444" },
+  btnText: { color: "#fff", fontWeight: "bold", marginTop: 10, fontSize: 15 },
 });

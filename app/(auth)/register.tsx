@@ -1,11 +1,8 @@
 import { useRouter } from "expo-router";
 import React, { useState } from "react";
-// Import Alert dari react-native
 import { Alert, Text, TouchableOpacity, View } from "react-native";
 import AuthButton from "../../components/buttonprimary";
 import AuthInput from "../../components/inputfield";
-// KOREKSI PATH IMPOR TETAP DILAKUKAN: Jika error 2307 tetap muncul, coba ganti '../../utils/login_handler'
-// menjadi '../utils/login_handler' atau gunakan @ alias jika Anda telah mengaturnya di tsconfig.
 import { handleRegister } from "./../../utils/login_handler";
 
 export default function RegisterScreen() {
@@ -14,39 +11,39 @@ export default function RegisterScreen() {
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
-  const [loading, setLoading] = useState(false); // State untuk loading
+  const [loading, setLoading] = useState(false);
 
   const registrationHandler = async () => {
-    // Validasi dasar
-    if (!email || !password) {
-      Alert.alert("Error", "Email and Password are required");
+    // Validasi dasar - Pastikan nama juga ada
+    if (!email || !password || !name) {
+      Alert.alert("Error", "Semua kolom harus diisi.");
       return;
     }
 
     setLoading(true);
 
     try {
-      await handleRegister(email, password);
+      // PERUBAHAN KRITIS: Kirimkan 'name' ke fungsi handler
+      await handleRegister(email, password, name);
 
       Alert.alert(
         "Success",
-        "Account successfully registered! You will be redirected to Home."
+        "Akun berhasil didaftarkan! Anda akan diarahkan ke Home."
       );
       router.replace("../(tabs)");
     } catch (error: any) {
-      // Menangani error dari Firebase
-      let errorMessage = "Registration failed. Please try again.";
+      let errorMessage = "Pendaftaran gagal. Silakan coba lagi.";
 
       if (error.code === "auth/email-already-in-use") {
         errorMessage =
-          "This email is already registered. Please log in or use a different email.";
+          "Email ini sudah terdaftar. Silakan login atau gunakan email lain.";
       } else if (error.code === "auth/weak-password") {
-        errorMessage = "Password is too weak. Minimum 6 characters.";
+        errorMessage = "Password terlalu lemah. Minimum 6 karakter.";
       } else if (error.message) {
         errorMessage = error.message;
       }
 
-      Alert.alert("Registration Failed", errorMessage);
+      Alert.alert("Pendaftaran Gagal", errorMessage);
     } finally {
       setLoading(false);
     }
@@ -94,10 +91,9 @@ export default function RegisterScreen() {
         onChangeText={setPassword}
       />
 
-      {/* Perbaikan Error Props Disabled: 
-          Menonaktifkan onPress jika loading, karena AuthButton mungkin tidak menerima prop disabled. */}
       <AuthButton
         title={loading ? "Mendaftar..." : "Sign Up"}
+        // Menggunakan kondisional untuk mencegah panggilan onPress saat loading
         onPress={loading ? () => {} : registrationHandler}
       />
 
