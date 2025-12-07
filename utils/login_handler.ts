@@ -3,7 +3,7 @@ import {
   sendPasswordResetEmail,
   signInWithEmailAndPassword,
 } from "firebase/auth";
-import { auth } from "./firebaseConfig";
+import { auth } from "./firebaseconfig";
 
 /**
  * Fungsi untuk mendaftarkan user baru dengan Email dan Password.

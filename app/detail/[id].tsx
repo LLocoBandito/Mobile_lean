@@ -12,7 +12,7 @@ import {
   View,
 } from "react-native";
 import MapView, { Marker, Polyline } from "react-native-maps";
-import { db } from "../../utils/firebaseConfig";
+import { db } from "../../utils/firebaseconfig";
 
 export default function DetailScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();

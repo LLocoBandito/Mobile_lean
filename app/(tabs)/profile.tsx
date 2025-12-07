@@ -3,7 +3,7 @@ import { getAuth, signOut } from "firebase/auth";
 import { doc, getDoc } from "firebase/firestore";
 import React, { useEffect, useState } from "react";
 import { Alert, StyleSheet, Text, TouchableOpacity, View } from "react-native";
-import { db } from "../../utils/firebaseConfig";
+import { db } from "../../utils/firebaseconfig";
 
 export default function ProfileScreen() {
   const router = useRouter();

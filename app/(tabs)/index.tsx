@@ -20,7 +20,7 @@ import {
 import MapView, { Marker, Polyline } from "react-native-maps";
 import { SafeAreaView } from "react-native-safe-area-context";
 import Svg, { Path } from "react-native-svg";
-import { db } from "../../utils/firebaseConfig"; // Pastikan path ini benar
+import { db } from "../../utils/firebaseconfig"; // Pastikan path ini benar
 
 const { width: SCREEN_WIDTH } = Dimensions.get("window");
 

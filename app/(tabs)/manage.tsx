@@ -19,7 +19,7 @@ import {
   TouchableOpacity,
   View,
 } from "react-native";
-import { db } from "../../utils/firebaseConfig"; // Ensure the path to firebaseConfig is correct
+import { db } from "../../utils/firebaseconfig"; // Ensure the path to firebaseConfig is correct
 
 interface MonitoringSession {
   id: string;
