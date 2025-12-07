@@ -12,14 +12,14 @@ import {
   ScrollView,
   StatusBar,
   StyleSheet,
-  Text,
+  Text, // Pastikan Text di-import
   TouchableOpacity,
-  View,
+  View, // Pastikan View di-import
 } from "react-native";
 import MapView, { Marker, Polyline } from "react-native-maps";
 import { SafeAreaView } from "react-native-safe-area-context";
 import Svg, { Path } from "react-native-svg";
-import { db } from "../../utils/firebaseConfig";
+import { auth, db } from "../../utils/firebaseConfig";
 
 const { width: SCREEN_WIDTH } = Dimensions.get("window");
 
@@ -73,27 +73,19 @@ export default function Home() {
   const isDark = colorScheme === "dark";
 
   const colors = {
-    // NIGHT MODE (Dark, Soft)
-    // SUN MODE (Light/Negative Display, Hard Black/White)
-
     BG_PRIMARY: isDark ? "#0F172A" : "#000000",
-    BG_CARD: isDark
-      ? "rgba(30, 41, 59, 0.95)" // Dark: elemen gelap transparan
-      : "#111111", // Light (Negative): elemen sangat gelap solid
+    BG_CARD: isDark ? "rgba(30, 41, 59, 0.95)" : "#111111",
 
-    TEXT_PRIMARY: isDark ? "#E2E8F0" : "#FFFFFF", // Dark: Putih kebiruan, Light: Putih murni
-    TEXT_SECONDARY: isDark ? "#94A3B8" : "#AAAAAA", // Dark: Abu-abu, Light: Abu-abu terang
+    TEXT_PRIMARY: isDark ? "#E2E8F0" : "#FFFFFF",
+    TEXT_SECONDARY: isDark ? "#94A3B8" : "#AAAAAA",
 
-    BORDER: isDark ? "#475569" : "#333333", // Batas yang berbeda kecerahannya
+    BORDER: isDark ? "#475569" : "#333333",
 
-    // Warna Aksen tetap cerah dan memiliki kontras tinggi di kedua mode
     ACCENT_SAFE: "#10B981",
     ACCENT_WARNING: "#F59E0B",
     ACCENT_DANGER: "#EF4444",
     ACCENT_INFO: "#3B82F6",
   };
-
-  // === Implementasi fungsi lainnya tetap sama ===
 
   // === BEEP & HAPTICS ===
   useEffect(() => {
@@ -249,7 +241,6 @@ export default function Home() {
     setSubscription(null);
     setLocationWatcher(null);
     setStatus("Disconnected");
-    setLocationPoints([]);
     setCurrentSpeed(0);
   };
 
@@ -266,15 +257,33 @@ export default function Home() {
     }
   };
 
+  /**
+   * Menyimpan data sesi ke Firestore dan menyertakan UID pengguna.
+   */
   const saveData = async () => {
-    if (locationPoints.length < 1) {
-      Alert.alert("Data Kurang", "Minimal 1 titik GPS!");
+    const user = auth.currentUser;
+    if (!user) {
+      Alert.alert(
+        "Error",
+        "Anda harus login untuk menyimpan data sesi. Silakan cek status autentikasi."
+      );
       return;
     }
+    const userId = user.uid; // 🔥 Dapatkan UID pengguna yang login
+
+    if (locationPoints.length < 1) {
+      Alert.alert(
+        "Data Kurang",
+        "Minimal 1 titik GPS diperlukan untuk menyimpan sesi."
+      );
+      return;
+    }
+
     stopMonitoring();
 
     try {
       await addDoc(collection(db, "monitoring_sessions"), {
+        userId: userId, // <-- Menyimpan ID pengguna
         sessionName: `Lean Session ${new Date().toLocaleString("id-ID")}`,
         totalPoints: locationPoints.length,
         path: locationPoints,
@@ -286,8 +295,13 @@ export default function Home() {
         createdAt: new Date().toISOString(),
       });
       Alert.alert("Sukses!", "Data + waktu akselerasi tersimpan!");
+      setLocationPoints([]); // Kosongkan setelah berhasil simpan
     } catch (e: any) {
-      Alert.alert("Error", e.message);
+      console.error("Error saving data:", e);
+      Alert.alert(
+        "Error",
+        `Gagal menyimpan data: ${e.message}. Pastikan izin Firestore sudah benar.`
+      );
     }
   };
 
@@ -346,7 +360,6 @@ export default function Home() {
 
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: colors.BG_PRIMARY }}>
-      {/* StatusBar selalu light-content karena BG selalu gelap (atau sangat gelap) */}
       <StatusBar
         barStyle={"light-content"}
         backgroundColor="transparent"
@@ -357,7 +370,6 @@ export default function Home() {
         <View
           style={{
             ...StyleSheet.absoluteFillObject,
-            // Overlay tetap gelap di kedua mode
             backgroundColor: isDark
               ? "rgba(30, 41, 59, 0.4)"
               : "rgba(0, 0, 0, 0.4)",
@@ -572,12 +584,14 @@ export default function Home() {
                 Sudut Kemiringan (Roll)
               </Text>
               <Svg height="200" width="300">
+                {/* Latar Belakang Arc */}
                 <Path
                   d="M30 150 A120 120 0 0 1 270 150"
                   stroke={colors.BORDER}
                   strokeWidth="10"
                   fill="none"
                 />
+                {/* Indikator Roll */}
                 <Path
                   d={getArcPath(displayRoll)}
                   stroke={getRollPathColor()}
@@ -630,8 +644,6 @@ export default function Home() {
                 Peta Perjalanan
               </Text>
               <MapView
-                // MapView tidak dapat diubah warnanya menjadi negative display dengan mudah
-                // Jadi, kita biarkan default atau menggunakan mapStyle yang gelap
                 style={styles.map}
                 region={
                   locationPoints.length > 0
@@ -711,6 +723,9 @@ export default function Home() {
             <TouchableOpacity
               style={[styles.controlBtn, styles.stopBtn]}
               onPress={stopMonitoring}
+              disabled={
+                status === "Disconnected" && locationPoints.length === 0
+              }
             >
               <Ionicons name="stop-circle" size={40} color="#fff" />
               <Text style={styles.btnText}>STOP</Text>

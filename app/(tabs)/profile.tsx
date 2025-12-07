@@ -2,7 +2,6 @@ import * as ImagePicker from "expo-image-picker";
 import { useRouter } from "expo-router";
 import { signOut } from "firebase/auth";
 import { doc, getDoc, updateDoc } from "firebase/firestore";
-import { getDownloadURL, ref, uploadBytes } from "firebase/storage";
 import React, { useEffect, useState } from "react";
 import {
   ActivityIndicator,
@@ -15,16 +14,49 @@ import {
   TouchableOpacity,
   View,
 } from "react-native";
-import { auth, db, storage } from "../../utils/firebaseConfig";
+import { auth, db } from "../../utils/firebaseConfig";
+
+// =========================================================
+// ⚡ KONFIGURASI CLOUDINARY ⚡
+// =========================================================
+const CLOUDINARY_CLOUD_NAME = "dvi8oy2ue";
+const CLOUDINARY_UPLOAD_PRESET = "react_native_profile";
+const CLOUDINARY_URL = `https://api.cloudinary.com/v1_1/${CLOUDINARY_CLOUD_NAME}/image/upload`;
+// =========================================================
+
+// --- Komponen Pembantu InfoRow ---
+const InfoRow = ({ label, value }: { label: string; value: string }) => (
+  <View style={styles.row}>
+    <Text style={styles.label}>{label}</Text>
+    <Text style={styles.value}>{value}</Text>
+  </View>
+);
 
 export default function ProfileScreen() {
   const router = useRouter();
   const user = auth.currentUser;
-  const userId = user?.uid || "guest";
+  const userId = user?.uid; // Mengambil UID, bisa null jika belum login
 
   const [profile, setProfile] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [uploading, setUploading] = useState(false);
+
+  // === FUNGSI FETCH PROFILE ===
+  const fetchProfile = async () => {
+    if (!userId) {
+      setLoading(false);
+      return;
+    }
+    try {
+      const docRef = doc(db, "users", userId);
+      const snap = await getDoc(docRef);
+      if (snap.exists()) setProfile(snap.data());
+    } catch (e) {
+      console.error("Error fetching profile:", e);
+    } finally {
+      setLoading(false);
+    }
+  };
 
   useEffect(() => {
     if (!user) {
@@ -32,21 +64,9 @@ export default function ProfileScreen() {
       return;
     }
     fetchProfile();
-  }, [userId]);
+  }, [user]); // Dependensi user memastikan fetch dilakukan setelah login
 
-  const fetchProfile = async () => {
-    try {
-      const docRef = doc(db, "users", userId);
-      const snap = await getDoc(docRef);
-      if (snap.exists()) setProfile(snap.data());
-    } catch (e) {
-      console.error(e);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  // Upload foto profil ke Firebase Storage
+  // 🔥 FUNGSI UPLOAD KE CLOUDINARY 🔥
   const pickAndUploadImage = async () => {
     const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
     if (!permission.granted) {
@@ -57,25 +77,46 @@ export default function ProfileScreen() {
     const result = await ImagePicker.launchImageLibraryAsync({
       allowsEditing: true,
       aspect: [1, 1],
-      quality: 0.8,
+      quality: 0.7,
+      base64: true,
     });
 
-    if (result.canceled || !result.assets[0].uri) return;
+    if (result.canceled || !result.assets || !result.assets[0].base64) return;
 
     setUploading(true);
-    const uri = result.assets[0].uri;
-    const response = await fetch(uri);
-    const blob = await response.blob();
+    const base64Image = result.assets[0].base64;
 
-    const storageRef = ref(storage, `profilePictures/${userId}`);
-    await uploadBytes(storageRef, blob);
-    const photoURL = await getDownloadURL(storageRef);
+    try {
+      const data = new FormData();
+      data.append("file", `data:image/jpeg;base64,${base64Image}`);
+      data.append("upload_preset", CLOUDINARY_UPLOAD_PRESET);
+      data.append("folder", "primelean_profiles");
 
-    // Update Firestore
-    await updateDoc(doc(db, "users", userId), { photoURL });
-    setProfile({ ...profile, photoURL });
-    setUploading(false);
-    Alert.alert("Sukses", "Foto profil berhasil diupdate!");
+      const response = await fetch(CLOUDINARY_URL, {
+        method: "POST",
+        body: data,
+      });
+
+      const json = await response.json();
+
+      if (json.secure_url) {
+        const photoURL = json.secure_url;
+        await updateDoc(doc(db, "users", userId!), { photoURL }); // userId pasti ada di sini
+        setProfile({ ...profile, photoURL });
+        Alert.alert("Sukses", "Foto profil berhasil diupdate!");
+      } else {
+        console.error("Cloudinary Response Error:", json);
+        Alert.alert(
+          "Gagal",
+          "Gagal mengunggah foto. Cek konfigurasi Cloudinary Anda."
+        );
+      }
+    } catch (error: any) {
+      console.error("Upload Cloudinary Gagal:", error);
+      Alert.alert("Error", "Terjadi masalah koneksi atau server saat upload.");
+    } finally {
+      setUploading(false);
+    }
   };
 
   const handleLogout = async () => {
@@ -92,12 +133,25 @@ export default function ProfileScreen() {
     ]);
   };
 
+  // Tampilkan loading screen jika user belum dimuat
+  if (!user) {
+    return (
+      <View
+        style={[
+          styles.container,
+          { justifyContent: "center", alignItems: "center" },
+        ]}
+      >
+        <ActivityIndicator size="large" color="#3B82F6" />
+      </View>
+    );
+  }
+
   return (
     <>
       <StatusBar barStyle="light-content" backgroundColor="#0F172A" />
       <View style={styles.container}>
         <View style={styles.overlay} pointerEvents="none" />
-
         <ScrollView
           contentContainerStyle={{
             flexGrow: 1,
@@ -105,7 +159,7 @@ export default function ProfileScreen() {
             paddingBottom: 100,
           }}
         >
-          {/* Avatar + Upload Button */}
+          {/* Header & Avatar + Upload Button */}
           <View style={styles.header}>
             <TouchableOpacity onPress={pickAndUploadImage} disabled={uploading}>
               <View style={styles.avatarContainer}>
@@ -130,15 +184,13 @@ export default function ProfileScreen() {
                 </View>
               </View>
             </TouchableOpacity>
-
-            <Text style={styles.email}>{user?.email}</Text>
+            <Text style={styles.email}>{user.email}</Text>
             <Text style={styles.welcome}>Welcome back!</Text>
           </View>
 
           {/* Card Profil */}
           <View style={styles.card}>
             <Text style={styles.cardTitle}>Informasi Profil</Text>
-
             {loading ? (
               Array(5)
                 .fill(0)
@@ -162,7 +214,7 @@ export default function ProfileScreen() {
             )}
           </View>
 
-          {/* Tombol Edit & Logout di tengah-tengah */}
+          {/* Tombol Edit & Logout */}
           <View style={styles.buttonContainer}>
             <TouchableOpacity
               style={styles.editButton}
@@ -170,7 +222,6 @@ export default function ProfileScreen() {
             >
               <Text style={styles.buttonText}>Edit Profil</Text>
             </TouchableOpacity>
-
             <TouchableOpacity
               style={styles.logoutButton}
               onPress={handleLogout}
@@ -183,13 +234,6 @@ export default function ProfileScreen() {
     </>
   );
 }
-
-const InfoRow = ({ label, value }: { label: string; value: string }) => (
-  <View style={styles.row}>
-    <Text style={styles.label}>{label}</Text>
-    <Text style={styles.value}>{value}</Text>
-  </View>
-);
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: "#0F172A" },
@@ -293,7 +337,6 @@ const styles = StyleSheet.create({
     borderRadius: 8,
   },
 
-  // Tombol di tengah-tengah
   buttonContainer: { alignItems: "center", marginTop: 50 },
   editButton: {
     width: "80%",
