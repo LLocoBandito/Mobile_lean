@@ -46,7 +46,6 @@ export default function ProfileScreen() {
     }
   };
 
-  // Upload foto profil ke Firebase Storage
   const pickAndUploadImage = async () => {
     const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
     if (!permission.granted) {
@@ -57,7 +56,7 @@ export default function ProfileScreen() {
     const result = await ImagePicker.launchImageLibraryAsync({
       allowsEditing: true,
       aspect: [1, 1],
-      quality: 0.8,
+      quality: 0.9,
     });
 
     if (result.canceled || !result.assets[0].uri) return;
@@ -71,9 +70,9 @@ export default function ProfileScreen() {
     await uploadBytes(storageRef, blob);
     const photoURL = await getDownloadURL(storageRef);
 
-    // Update Firestore
     await updateDoc(doc(db, "users", userId), { photoURL });
     setProfile({ ...profile, photoURL });
+
     setUploading(false);
     Alert.alert("Sukses", "Foto profil berhasil diupdate!");
   };
@@ -93,230 +92,190 @@ export default function ProfileScreen() {
   };
 
   return (
-    <>
-      <StatusBar barStyle="light-content" backgroundColor="#0F172A" />
-      <View style={styles.container}>
-        <View style={styles.overlay} pointerEvents="none" />
+    <View style={styles.container}>
+      <StatusBar barStyle="light-content" />
 
-        <ScrollView
-          contentContainerStyle={{
-            flexGrow: 1,
-            justifyContent: "center",
-            paddingBottom: 100,
-          }}
-        >
-          {/* Avatar + Upload Button */}
-          <View style={styles.header}>
-            <TouchableOpacity onPress={pickAndUploadImage} disabled={uploading}>
-              <View style={styles.avatarContainer}>
-                {uploading ? (
-                  <ActivityIndicator size="large" color="#3B82F6" />
-                ) : profile?.photoURL ? (
-                  <Image
-                    source={{ uri: profile.photoURL }}
-                    style={styles.avatarImage}
-                  />
-                ) : (
-                  <View style={styles.avatar}>
-                    <Text style={styles.avatarText}>
-                      {profile?.name?.[0]?.toUpperCase() ||
-                        user?.email?.[0]?.toUpperCase() ||
-                        "U"}
-                    </Text>
-                  </View>
-                )}
-                <View style={styles.cameraIcon}>
-                  <Text style={{ fontSize: 20 }}>📷</Text>
-                </View>
-              </View>
-            </TouchableOpacity>
-
-            <Text style={styles.email}>{user?.email}</Text>
-            <Text style={styles.welcome}>Welcome back!</Text>
-          </View>
-
-          {/* Card Profil */}
-          <View style={styles.card}>
-            <Text style={styles.cardTitle}>Informasi Profil</Text>
-
-            {loading ? (
-              Array(5)
-                .fill(0)
-                .map((_, i) => (
-                  <View key={i} style={styles.skeletonRow}>
-                    <View style={styles.skeletonLabel} />
-                    <View style={styles.skeletonValue} />
-                  </View>
-                ))
-            ) : (
-              <>
-                <InfoRow label="Nama" value={profile?.name || "-"} />
-                <InfoRow label="Alamat" value={profile?.address || "-"} />
-                <InfoRow label="Tipe Motor" value={profile?.bikeType || "-"} />
-                <InfoRow label="Gol. Darah" value={profile?.bloodType || "-"} />
-                <InfoRow
-                  label="No. Darurat"
-                  value={profile?.emergencyPhone || "-"}
-                />
-              </>
-            )}
-          </View>
-
-          {/* Tombol Edit & Logout di tengah-tengah */}
-          <View style={styles.buttonContainer}>
-            <TouchableOpacity
-              style={styles.editButton}
-              onPress={() => router.push("/editprofile")}
-            >
-              <Text style={styles.buttonText}>Edit Profil</Text>
-            </TouchableOpacity>
-
-            <TouchableOpacity
-              style={styles.logoutButton}
-              onPress={handleLogout}
-            >
-              <Text style={styles.buttonText}>Logout</Text>
-            </TouchableOpacity>
-          </View>
-        </ScrollView>
+      {/* HEADER ELEGAN */}
+      <View style={styles.header}>
+        <Text style={styles.headerTitle}>Profile</Text>
       </View>
-    </>
+
+      <ScrollView contentContainerStyle={{ paddingBottom: 120 }}>
+        {/* AVATAR SECTION */}
+        <View style={styles.avatarSection}>
+          <TouchableOpacity onPress={pickAndUploadImage} disabled={uploading}>
+            <View style={styles.avatarWrapper}>
+              {uploading ? (
+                <ActivityIndicator size="large" color="#fff" />
+              ) : profile?.photoURL ? (
+                <Image
+                  source={{ uri: profile.photoURL }}
+                  style={styles.avatarImage}
+                />
+              ) : (
+                <View style={styles.avatarFallback}>
+                  <Text style={styles.avatarInitial}>
+                    {profile?.name?.[0]?.toUpperCase() ||
+                      user?.email?.[0]?.toUpperCase() ||
+                      "U"}
+                  </Text>
+                </View>
+              )}
+            </View>
+          </TouchableOpacity>
+
+          <Text style={styles.profileName}>{profile?.name || "User"}</Text>
+          <Text style={styles.profileEmail}>{user?.email}</Text>
+        </View>
+
+        {/* INFO CARD */}
+        <View style={styles.infoCard}>
+          <Text style={styles.infoTitle}>Personal Info</Text>
+
+          {loading ? (
+            <Text style={{ color: "#aaa" }}>Loading...</Text>
+          ) : (
+            <>
+              <InfoRow label="Nama" value={profile?.name || "-"} />
+              <InfoRow label="Alamat" value={profile?.address || "-"} />
+              <InfoRow label="Tipe Motor" value={profile?.bikeType || "-"} />
+              <InfoRow label="Gol. Darah" value={profile?.bloodType || "-"} />
+              <InfoRow
+                label="No. Darurat"
+                value={profile?.emergencyPhone || "-"}
+              />
+            </>
+          )}
+        </View>
+
+        {/* BUTTONS */}
+        <View style={styles.btnGroup}>
+          <TouchableOpacity
+            style={styles.editBtn}
+            onPress={() => router.push("/editprofile")}
+          >
+            <Text style={styles.btnText}>Edit Profile</Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity style={styles.logoutBtn} onPress={handleLogout}>
+            <Text style={styles.btnText}>Logout</Text>
+          </TouchableOpacity>
+        </View>
+      </ScrollView>
+    </View>
   );
 }
 
-const InfoRow = ({ label, value }: { label: string; value: string }) => (
+const InfoRow = ({ label, value }: any) => (
   <View style={styles.row}>
-    <Text style={styles.label}>{label}</Text>
-    <Text style={styles.value}>{value}</Text>
+    <Text style={styles.rowLabel}>{label}</Text>
+    <Text style={styles.rowValue}>{value}</Text>
   </View>
 );
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: "#0F172A" },
-  overlay: {
-    ...StyleSheet.absoluteFillObject,
-    backgroundColor: "rgba(30, 41, 59, 0.4)",
+
+  header: {
+    paddingTop: 65,
+    paddingBottom: 30,
+    paddingHorizontal: 24,
+    backgroundColor: "rgba(15, 23, 42, 0.6)",
+    borderBottomWidth: 0.5,
+    borderColor: "rgba(255,255,255,0.1)",
+  },
+  headerTitle: {
+    color: "#fff",
+    fontSize: 26,
+    fontWeight: "700",
   },
 
-  header: { alignItems: "center", paddingTop: 60, paddingBottom: 40 },
-  avatarContainer: { position: "relative" },
-  avatarImage: {
-    width: 160,
-    height: 160,
-    borderRadius: 80,
-    borderWidth: 6,
-    borderColor: "#1E293B",
-  },
-  avatar: {
-    width: 160,
-    height: 160,
-    borderRadius: 80,
-    backgroundColor: "#3B82F6",
-    justifyContent: "center",
+  avatarSection: {
     alignItems: "center",
-    borderWidth: 6,
-    borderColor: "#1E293B",
-    shadowColor: "#3B82F6",
-    shadowOpacity: 0.9,
-    shadowRadius: 30,
-    elevation: 25,
+    marginTop: 30,
   },
-  avatarText: { color: "#fff", fontSize: 70, fontWeight: "bold" },
-  cameraIcon: {
-    position: "absolute",
-    bottom: 10,
-    right: 10,
-    backgroundColor: "#fff",
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    justifyContent: "center",
-    alignItems: "center",
-    shadowColor: "#000",
-    shadowOpacity: 0.4,
-    elevation: 10,
-  },
-
-  email: { color: "#94A3B8", marginTop: 20, fontSize: 16 },
-  welcome: { color: "#F8FAFC", fontSize: 28, fontWeight: "bold", marginTop: 8 },
-
-  card: {
-    marginHorizontal: 24,
-    backgroundColor: "rgba(30, 41, 59, 0.95)",
-    borderRadius: 28,
-    padding: 30,
-    borderWidth: 1,
-    borderColor: "rgba(148, 163, 184, 0.3)",
-    shadowColor: "#000",
-    shadowOpacity: 0.5,
-    shadowRadius: 30,
+  avatarWrapper: {
+    width: 140,
+    height: 140,
+    borderRadius: 80,
+    overflow: "hidden",
+    backgroundColor: "#1E293B",
+    borderWidth: 3,
+    borderColor: "#3B82F6",
     elevation: 20,
+    shadowOpacity: 0.4,
+    shadowColor: "#3B82F6",
   },
-  cardTitle: {
-    color: "#F8FAFC",
-    fontSize: 24,
+  avatarImage: { width: "100%", height: "100%" },
+  avatarFallback: {
+    flex: 1,
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  avatarInitial: {
+    fontSize: 50,
     fontWeight: "bold",
-    textAlign: "center",
-    marginBottom: 30,
+    color: "#fff",
+  },
+
+  profileName: {
+    marginTop: 16,
+    fontSize: 26,
+    color: "#fff",
+    fontWeight: "700",
+  },
+  profileEmail: {
+    color: "#94A3B8",
+    fontSize: 15,
+    marginTop: 6,
+  },
+
+  infoCard: {
+    marginTop: 40,
+    marginHorizontal: 24,
+    backgroundColor: "rgba(255,255,255,0.06)",
+    padding: 22,
+    borderRadius: 20,
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.1)",
+  },
+  infoTitle: {
+    fontSize: 20,
+    color: "#fff",
+    fontWeight: "700",
+    marginBottom: 16,
   },
 
   row: {
+    paddingVertical: 12,
     flexDirection: "row",
     justifyContent: "space-between",
-    marginBottom: 22,
   },
-  label: { color: "#94A3B8", fontSize: 17, fontWeight: "500" },
-  value: {
-    color: "#F8FAFC",
-    fontSize: 18,
-    fontWeight: "600",
-    flex: 1,
-    textAlign: "right",
-    marginLeft: 20,
-  },
+  rowLabel: { color: "#94A3B8", fontSize: 16 },
+  rowValue: { color: "#fff", fontSize: 16, fontWeight: "600" },
 
-  skeletonRow: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    marginBottom: 22,
+  btnGroup: {
+    marginTop: 40,
+    alignItems: "center",
+    gap: 16,
   },
-  skeletonLabel: {
-    width: 110,
-    height: 22,
-    backgroundColor: "#334155",
-    borderRadius: 8,
-  },
-  skeletonValue: {
-    width: "55%",
-    height: 22,
-    backgroundColor: "#334155",
-    borderRadius: 8,
-  },
-
-  // Tombol di tengah-tengah
-  buttonContainer: { alignItems: "center", marginTop: 50 },
-  editButton: {
-    width: "80%",
+  editBtn: {
+    width: "85%",
+    paddingVertical: 16,
     backgroundColor: "#3B82F6",
-    paddingVertical: 20,
-    borderRadius: 24,
+    borderRadius: 16,
     alignItems: "center",
-    shadowColor: "#3B82F6",
-    shadowOpacity: 0.7,
-    shadowRadius: 25,
-    elevation: 18,
   },
-  logoutButton: {
-    width: "80%",
-    marginTop: 20,
+  logoutBtn: {
+    width: "85%",
+    paddingVertical: 16,
     backgroundColor: "#EF4444",
-    paddingVertical: 20,
-    borderRadius: 24,
+    borderRadius: 16,
     alignItems: "center",
-    shadowColor: "#EF4444",
-    shadowOpacity: 0.7,
-    shadowRadius: 25,
-    elevation: 18,
   },
-  buttonText: { color: "#fff", fontSize: 19, fontWeight: "bold" },
+  btnText: {
+    color: "#fff",
+    fontWeight: "700",
+    fontSize: 16,
+  },
 });

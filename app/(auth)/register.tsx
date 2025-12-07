@@ -1,9 +1,18 @@
 import { useRouter } from "expo-router";
 import React, { useState } from "react";
-import { Alert, Text, TouchableOpacity, View } from "react-native";
+import {
+  Alert,
+  Text,
+  TouchableOpacity,
+  View,
+  KeyboardAvoidingView,
+  Platform,
+  StyleSheet,
+} from "react-native";
+import { Ionicons } from "@expo/vector-icons";
 import AuthButton from "../../components/buttonprimary";
 import AuthInput from "../../components/inputfield";
-import { handleRegister } from "./../../utils/login_handler";
+import { handleRegister } from "../../utils/login_handler";
 
 export default function RegisterScreen() {
   const router = useRouter();
@@ -14,7 +23,6 @@ export default function RegisterScreen() {
   const [loading, setLoading] = useState(false);
 
   const registrationHandler = async () => {
-    // Validasi dasar - Pastikan nama juga ada
     if (!email || !password || !name) {
       Alert.alert("Error", "Semua kolom harus diisi.");
       return;
@@ -23,24 +31,17 @@ export default function RegisterScreen() {
     setLoading(true);
 
     try {
-      // PERUBAHAN KRITIS: Kirimkan 'name' ke fungsi handler
       await handleRegister(email, password, name);
 
-      Alert.alert(
-        "Success",
-        "Akun berhasil didaftarkan! Anda akan diarahkan ke Home."
-      );
+      Alert.alert("Success", "Akun berhasil dibuat!");
       router.replace("../(tabs)");
     } catch (error: any) {
       let errorMessage = "Pendaftaran gagal. Silakan coba lagi.";
 
       if (error.code === "auth/email-already-in-use") {
-        errorMessage =
-          "Email ini sudah terdaftar. Silakan login atau gunakan email lain.";
+        errorMessage = "Email sudah terdaftar.";
       } else if (error.code === "auth/weak-password") {
-        errorMessage = "Password terlalu lemah. Minimum 6 karakter.";
-      } else if (error.message) {
-        errorMessage = error.message;
+        errorMessage = "Password terlalu lemah. Minimal 6 karakter.";
       }
 
       Alert.alert("Pendaftaran Gagal", errorMessage);
@@ -50,65 +51,111 @@ export default function RegisterScreen() {
   };
 
   return (
-    <View
-      style={{
-        flex: 1,
-        justifyContent: "center",
-        padding: 24,
-        backgroundColor: "#0F172A", // Dark background
-      }}
+    <KeyboardAvoidingView
+      behavior={Platform.OS === "ios" ? "padding" : undefined}
+      style={styles.container}
     >
-      <Text
-        style={{
-          fontSize: 28,
-          fontWeight: "700",
-          marginBottom: 40,
-          textAlign: "center",
-          color: "#fff",
-        }}
-      >
-        Create Account ✨
-      </Text>
+      <View style={styles.card}>
+        <View style={styles.iconBox}>
+          <Ionicons name="person-add-outline" size={46} color="#fff" />
+        </View>
 
-      <AuthInput
-        label="Full Name"
-        placeholder="Your name"
-        value={name}
-        onChangeText={setName}
-      />
-      <AuthInput
-        label="Email"
-        placeholder="Your email"
-        keyboardType="email-address"
-        value={email}
-        onChangeText={setEmail}
-      />
-      <AuthInput
-        label="Password"
-        placeholder="Create password"
-        secureTextEntry
-        value={password}
-        onChangeText={setPassword}
-      />
-
-      <AuthButton
-        title={loading ? "Mendaftar..." : "Sign Up"}
-        // Menggunakan kondisional untuk mencegah panggilan onPress saat loading
-        onPress={loading ? () => {} : registrationHandler}
-      />
-
-      <TouchableOpacity onPress={() => router.push("/(auth)/login")}>
-        <Text
-          style={{
-            textAlign: "center",
-            marginTop: 20,
-            color: "#CBD5E1",
-          }}
-        >
-          Already have an account?{" "}
-          <Text style={{ color: "#3B82F6", fontWeight: "bold" }}>Login</Text>
+        <Text style={styles.title}>Create Account ✨</Text>
+        <Text style={styles.subtitle}>
+          Daftar untuk memulai pengalamanmu!
         </Text>
-      </TouchableOpacity>
-    </View>
+
+        <AuthInput
+          label="Full Name"
+          placeholder="Your name"
+          value={name}
+          onChangeText={setName}
+        />
+
+        <AuthInput
+          label="Email"
+          placeholder="Your email"
+          keyboardType="email-address"
+          value={email}
+          onChangeText={setEmail}
+        />
+
+        <AuthInput
+          label="Password"
+          placeholder="Create password"
+          secureTextEntry
+          value={password}
+          onChangeText={setPassword}
+        />
+
+        <View style={{ marginTop: 15 }}>
+          <AuthButton
+            title={loading ? "Mendaftar..." : "Sign Up"}
+            onPress={loading ? () => {} : registrationHandler}
+          />
+        </View>
+
+        <TouchableOpacity onPress={() => router.push("/(auth)/login")}>
+          <Text style={styles.linkText}>
+            Already have an account?{" "}
+            <Text style={styles.linkHighlight}>Login</Text>
+          </Text>
+        </TouchableOpacity>
+      </View>
+    </KeyboardAvoidingView>
   );
 }
+
+const styles = StyleSheet.create({
+  container: {
+    flex: 1,
+    backgroundColor: "#0F172A",
+    justifyContent: "center",
+    padding: 24,
+  },
+  card: {
+    backgroundColor: "rgba(255, 255, 255, 0.03)",
+    paddingVertical: 40,
+    paddingHorizontal: 26,
+    borderRadius: 22,
+    shadowColor: "#000",
+    shadowOpacity: 0.3,
+    shadowRadius: 12,
+  },
+  iconBox: {
+    width: 75,
+    height: 75,
+    backgroundColor: "#3B82F6",
+    borderRadius: 40,
+    alignSelf: "center",
+    justifyContent: "center",
+    alignItems: "center",
+    marginBottom: 22,
+    shadowColor: "#3B82F6",
+    shadowOpacity: 0.5,
+    shadowRadius: 10,
+  },
+  title: {
+    color: "#fff",
+    fontSize: 28,
+    fontWeight: "800",
+    textAlign: "center",
+  },
+  subtitle: {
+    color: "#94A3B8",
+    textAlign: "center",
+    marginTop: 6,
+    marginBottom: 28,
+    fontSize: 15,
+  },
+  linkText: {
+    textAlign: "center",
+    marginTop: 20,
+    color: "#CBD5E1",
+    fontSize: 15,
+  },
+  linkHighlight: {
+    color: "#3B82F6",
+    fontWeight: "700",
+  },
+});
