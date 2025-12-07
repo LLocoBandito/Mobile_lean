@@ -1,154 +1,146 @@
-import { Feather, MaterialCommunityIcons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
-import React from "react";
-import {
-  Image,
-  ScrollView,
-  StyleSheet,
-  Text,
-  TouchableOpacity,
-  View,
-} from "react-native";
+import { getAuth, signOut } from "firebase/auth";
+import { doc, getDoc } from "firebase/firestore";
+import React, { useEffect, useState } from "react";
+import { Alert, StyleSheet, Text, TouchableOpacity, View } from "react-native";
+import { db } from "../../utils/firebaseConfig";
 
 export default function ProfileScreen() {
   const router = useRouter();
+  const auth = getAuth();
+  const user = auth.currentUser;
+  const userId = user?.uid || "user_1"; // temporarily use user_1 if not logged in
 
-  const userData = {
-    name: "I Komang Gede Wirawan",
-    address: "Jl. Raya Denpasar No. 123, Bali",
-    bikeType: "Yamaha NMAX 155",
-    maxTilt: "47°",
-    bloodType: "O+",
-    emergencyPhone: "+62 812-3456-7890",
-    photo: "https://cdn-icons-png.flaticon.com/512/3135/3135715.png",
-  };
+  const [profile, setProfile] = useState({
+    name: "",
+    address: "",
+    bikeType: "",
+    bloodType: "",
+    emergencyPhone: "",
+  });
 
-  // Fungsi logout
+  // 🔹 Fetch data from Firestore when the page loads
+  useEffect(() => {
+    const fetchProfile = async () => {
+      try {
+        const docRef = doc(db, "users", userId);
+        const snapshot = await getDoc(docRef);
+        if (snapshot.exists()) {
+          setProfile(snapshot.data() as typeof profile);
+        } else {
+          console.log("Profile does not exist in Firestore yet");
+        }
+      } catch (error) {
+        console.error("Failed to load profile:", error);
+      }
+    };
+
+    fetchProfile();
+  }, []);
+
   const handleLogout = () => {
-    // Jika nanti kamu pakai AsyncStorage untuk simpan session/login token:
-    // await AsyncStorage.removeItem("userToken");
-    router.replace("/login"); // arahkan ke halaman login dan hapus history
+    Alert.alert("Log Out", "Are you sure you want to log out?", [
+      { text: "Cancel", style: "cancel" },
+      {
+        text: "Yes",
+        style: "destructive",
+        onPress: async () => {
+          try {
+            await signOut(auth);
+            Alert.alert("Logout Successful", "See you again 👋");
+            router.replace("/login");
+          } catch (error) {
+            console.error("Failed to log out:", error);
+            Alert.alert("Error", "Failed to log out of the system.");
+          }
+        },
+      },
+    ]);
   };
 
   return (
-    <ScrollView contentContainerStyle={styles.container}>
-      <Text style={styles.header}>Profil Pengguna</Text>
+    <View style={styles.container}>
+      <Text style={styles.header}>User Profile</Text>
 
-      <View style={styles.photoContainer}>
-        <Image source={{ uri: userData.photo }} style={styles.profilePhoto} />
-        <Text style={styles.userName}>{userData.name}</Text>
+      <View style={styles.infoBox}>
+        <Text style={styles.label}>Name:</Text>
+        <Text style={styles.value}>{profile.name || "-"}</Text>
+
+        <Text style={styles.label}>Address:</Text>
+        <Text style={styles.value}>{profile.address || "-"}</Text>
+
+        <Text style={styles.label}>Bike Type:</Text>
+        <Text style={styles.value}>{profile.bikeType || "-"}</Text>
+
+        <Text style={styles.label}>Blood Type:</Text>
+        <Text style={styles.value}>{profile.bloodType || "-"}</Text>
+
+        <Text style={styles.label}>Emergency Number:</Text>
+        <Text style={styles.value}>{profile.emergencyPhone || "-"}</Text>
       </View>
 
-      <View style={styles.card}>
-        <View style={styles.infoRow}>
-          <Feather name="map-pin" size={22} color="#60A5FA" />
-          <Text style={styles.label}>Alamat:</Text>
-          <Text style={styles.value}>{userData.address}</Text>
-        </View>
-
-        <View style={styles.infoRow}>
-          <MaterialCommunityIcons name="tire" size={22} color="#60A5FA" />
-          <Text style={styles.label}>Kemiringan Terjauh:</Text>
-          <Text style={styles.value}>{userData.maxTilt}</Text>
-        </View>
-
-        <View style={styles.infoRow}>
-          <MaterialCommunityIcons name="motorbike" size={22} color="#60A5FA" />
-          <Text style={styles.label}>Jenis Motor:</Text>
-          <Text style={styles.value}>{userData.bikeType}</Text>
-        </View>
-
-        <View style={styles.infoRow}>
-          <Feather name="droplet" size={22} color="#60A5FA" />
-          <Text style={styles.label}>Golongan Darah:</Text>
-          <Text style={styles.value}>{userData.bloodType}</Text>
-        </View>
-
-        <View style={styles.infoRow}>
-          <Feather name="phone-call" size={22} color="#60A5FA" />
-          <Text style={styles.label}>Nomor Darurat:</Text>
-          <Text style={styles.value}>{userData.emergencyPhone}</Text>
-        </View>
-      </View>
-
-      {/* Tombol Edit Profil */}
       <TouchableOpacity
-        style={[styles.button, { backgroundColor: "#3B82F6" }]}
+        style={styles.editButton}
         onPress={() => router.push("/editprofile")}
       >
-        <Text style={styles.buttonText}>Edit Profil</Text>
+        <Text style={styles.editButtonText}>Edit Profile</Text>
       </TouchableOpacity>
 
-      {/* Tombol Logout */}
-      <TouchableOpacity
-        style={[styles.button, { backgroundColor: "#EF4444", marginTop: 10 }]}
-        onPress={handleLogout}
-      >
-        <Text style={styles.buttonText}>Logout</Text>
+      <TouchableOpacity style={styles.logoutButton} onPress={handleLogout}>
+        <Text style={styles.logoutButtonText}>Logout</Text>
       </TouchableOpacity>
-    </ScrollView>
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
   container: {
-    flexGrow: 1,
-    padding: 20,
+    flex: 1,
     backgroundColor: "#0F172A",
+    padding: 20,
   },
   header: {
     fontSize: 24,
     fontWeight: "bold",
     color: "#fff",
-    marginBottom: 10,
     textAlign: "center",
-  },
-  photoContainer: {
-    alignItems: "center",
     marginBottom: 20,
   },
-  profilePhoto: {
-    width: 100,
-    height: 100,
-    borderRadius: 50,
-    borderWidth: 3,
-    borderColor: "#3B82F6",
-    marginBottom: 10,
-  },
-  userName: {
-    fontSize: 20,
-    fontWeight: "bold",
-    color: "#fff",
-  },
-  card: {
+  infoBox: {
     backgroundColor: "#1E293B",
-    borderRadius: 12,
+    borderRadius: 10,
     padding: 20,
-    marginBottom: 30,
-  },
-  infoRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    marginBottom: 15,
+    marginBottom: 20,
   },
   label: {
-    color: "#CBD5E1",
-    fontSize: 16,
-    marginLeft: 10,
-    flex: 0.7,
+    color: "#94A3B8",
+    fontSize: 14,
   },
   value: {
-    color: "#fff",
+    color: "#F8FAFC",
     fontSize: 16,
     fontWeight: "600",
-    flex: 1,
+    marginBottom: 10,
   },
-  button: {
+  editButton: {
+    backgroundColor: "#3B82F6",
     paddingVertical: 14,
     borderRadius: 10,
     alignItems: "center",
   },
-  buttonText: {
+  editButtonText: {
+    color: "#fff",
+    fontSize: 16,
+    fontWeight: "bold",
+  },
+  logoutButton: {
+    backgroundColor: "#EF4444",
+    paddingVertical: 14,
+    borderRadius: 10,
+    alignItems: "center",
+    marginTop: 15,
+  },
+  logoutButtonText: {
     color: "#fff",
     fontSize: 16,
     fontWeight: "bold",

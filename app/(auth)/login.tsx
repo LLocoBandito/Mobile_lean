@@ -1,4 +1,5 @@
 import { Href, useRouter } from "expo-router";
+import { signInWithEmailAndPassword } from "firebase/auth";
 import React, { FC, useState } from "react";
 import {
   ActivityIndicator,
@@ -8,6 +9,7 @@ import {
   TouchableOpacity,
   View,
 } from "react-native";
+import { auth } from "../../utils/firebaseconfig"; // pastikan path sesuai
 
 const LoginScreen: FC = () => {
   const router = useRouter();
@@ -16,27 +18,34 @@ const LoginScreen: FC = () => {
   const [loading, setLoading] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
-  const TEST_EMAIL = "test@gmail.com";
-  const TEST_PASSWORD = "1234";
-
-  const handleLogin = () => {
+  const handleLogin = async () => {
     setLoading(true);
     setErrorMessage(null);
 
-    setTimeout(() => {
-      setLoading(false);
+    try {
+      const userCredential = await signInWithEmailAndPassword(
+        auth,
+        email,
+        password
+      );
+      console.log("Login successful:", userCredential.user.email);
 
-      if (email === TEST_EMAIL && password === TEST_PASSWORD) {
-        router.replace("/(tabs)");
-      } else {
-        setErrorMessage("Email atau password salah!");
-      }
-    }, 1000);
+      // Redirect ke tab utama
+      router.replace("/(tabs)");
+    } catch (error: any) {
+      console.log("Login failed:", error.message);
+      setErrorMessage(error.message);
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (
     <View style={styles.container}>
+
       <Text style={styles.title}>Selamat Datang mang j</Text>
+
+      <Text style={styles.title}>Welcome Back</Text>
 
       {errorMessage && (
         <View style={styles.errorContainer}>
@@ -45,7 +54,7 @@ const LoginScreen: FC = () => {
       )}
 
       <TextInput
-        placeholder="Email (test@gmail.com)"
+        placeholder="Email"
         placeholderTextColor="#9CA3AF"
         value={email}
         onChangeText={setEmail}
@@ -55,7 +64,7 @@ const LoginScreen: FC = () => {
       />
 
       <TextInput
-        placeholder="Password (1234)"
+        placeholder="Password"
         placeholderTextColor="#9CA3AF"
         secureTextEntry
         value={password}
@@ -76,15 +85,11 @@ const LoginScreen: FC = () => {
       </TouchableOpacity>
 
       <TouchableOpacity onPress={() => router.push("/(auth)/forgot" as Href)}>
-        <Text style={{ color: "#3B82F6", textAlign: "center", marginTop: 10 }}>
-          Lupa Password?
-        </Text>
+        <Text style={styles.linkText}>Forgot Password?</Text>
       </TouchableOpacity>
 
       <TouchableOpacity onPress={() => router.push("/(auth)/register" as Href)}>
-        <Text style={{ color: "#3B82F6", textAlign: "center", marginTop: 5 }}>
-          Belum punya akun? Daftar
-        </Text>
+        <Text style={styles.linkText}>Don't have an account? Register</Text>
       </TouchableOpacity>
     </View>
   );
@@ -136,6 +141,11 @@ const styles = StyleSheet.create({
     color: "#F87171",
     textAlign: "center",
     fontWeight: "500",
+  },
+  linkText: {
+    color: "#3B82F6",
+    textAlign: "center",
+    marginTop: 10,
   },
 });
 
