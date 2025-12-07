@@ -28,9 +28,9 @@ export default function RegisterScreen() {
 
       Alert.alert(
         "Success",
-        "Akun berhasil didaftarkan! Anda akan diarahkan ke Home."
+        "Akun berhasil didaftarkan! Anda akan diarahkan ke login."
       );
-      router.replace("../(tabs)");
+      router.replace("../(auth)/login");
     } catch (error: any) {
       let errorMessage = "Pendaftaran gagal. Silakan coba lagi.";
 
