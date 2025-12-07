@@ -11,7 +11,7 @@ import {
   TouchableOpacity,
   View,
 } from "react-native";
-import { db } from "../utils/firebaseconfig";
+import { db } from "../utils/firebaseConfig";
 
 export default function EditProfileScreen() {
   const router = useRouter();
