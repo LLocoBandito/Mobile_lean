@@ -1,141 +1,365 @@
-import { Feather, MaterialCommunityIcons } from "@expo/vector-icons";
-import { useRouter } from "expo-router"; // ✅ tambahkan ini
-import React from "react";
+import * as ImagePicker from "expo-image-picker";
+import { useRouter } from "expo-router";
+import { signOut } from "firebase/auth";
+import { doc, getDoc, updateDoc } from "firebase/firestore";
+import React, { useEffect, useState } from "react";
 import {
+  ActivityIndicator,
+  Alert,
   Image,
   ScrollView,
+  StatusBar,
   StyleSheet,
   Text,
   TouchableOpacity,
   View,
 } from "react-native";
+import { auth, db } from "../../utils/firebaseConfig";
+
+// =========================================================
+// ⚡ KONFIGURASI CLOUDINARY ⚡
+// =========================================================
+const CLOUDINARY_CLOUD_NAME = "dvi8oy2ue";
+const CLOUDINARY_UPLOAD_PRESET = "react_native_profile";
+const CLOUDINARY_URL = `https://api.cloudinary.com/v1_1/${CLOUDINARY_CLOUD_NAME}/image/upload`;
+// =========================================================
+
+// --- Komponen Pembantu InfoRow ---
+const InfoRow = ({ label, value }: { label: string; value: string }) => (
+  <View style={styles.row}>
+    <Text style={styles.label}>{label}</Text>
+    <Text style={styles.value}>{value}</Text>
+  </View>
+);
 
 export default function ProfileScreen() {
-  const router = useRouter(); // ✅ instance router
+  const router = useRouter();
+  const user = auth.currentUser;
+  const userId = user?.uid; // Mengambil UID, bisa null jika belum login
 
-  const userData = {
-    name: "I Komang Gede Wirawan",
-    address: "Jl. Raya Denpasar No. 123, Bali",
-    bikeType: "Yamaha NMAX 155",
-    maxTilt: "47°",
-    bloodType: "O+",
-    emergencyPhone: "+62 812-3456-7890",
-    photo: "https://cdn-icons-png.flaticon.com/512/3135/3135715.png",
+  const [profile, setProfile] = useState<any>(null);
+  const [loading, setLoading] = useState(true);
+  const [uploading, setUploading] = useState(false);
+
+  // === FUNGSI FETCH PROFILE ===
+  const fetchProfile = async () => {
+    if (!userId) {
+      setLoading(false);
+      return;
+    }
+    try {
+      const docRef = doc(db, "users", userId);
+      const snap = await getDoc(docRef);
+      if (snap.exists()) setProfile(snap.data());
+    } catch (e) {
+      console.error("Error fetching profile:", e);
+    } finally {
+      setLoading(false);
+    }
   };
 
-  return (
-    <ScrollView contentContainerStyle={styles.container}>
-      <Text style={styles.header}>Profil Pengguna</Text>
+  useEffect(() => {
+    if (!user) {
+      router.replace("/login");
+      return;
+    }
+    fetchProfile();
+  }, [user]); // Dependensi user memastikan fetch dilakukan setelah login
 
-      <View style={styles.photoContainer}>
-        <Image source={{ uri: userData.photo }} style={styles.profilePhoto} />
-        <Text style={styles.userName}>{userData.name}</Text>
-      </View>
+  // 🔥 FUNGSI UPLOAD KE CLOUDINARY 🔥
+  const pickAndUploadImage = async () => {
+    const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
+    if (!permission.granted) {
+      Alert.alert("Izin ditolak", "Kami butuh izin untuk mengakses galeri");
+      return;
+    }
 
-      <View style={styles.card}>
-        <View style={styles.infoRow}>
-          <Feather name="map-pin" size={22} color="#60A5FA" />
-          <Text style={styles.label}>Alamat:</Text>
-          <Text style={styles.value}>{userData.address}</Text>
-        </View>
+    const result = await ImagePicker.launchImageLibraryAsync({
+      allowsEditing: true,
+      aspect: [1, 1],
+      quality: 0.7,
+      base64: true,
+    });
 
-        <View style={styles.infoRow}>
-          <MaterialCommunityIcons name="tire" size={22} color="#60A5FA" />
-          <Text style={styles.label}>Kemiringan Terjauh:</Text>
-          <Text style={styles.value}>{userData.maxTilt}</Text>
-        </View>
+    if (result.canceled || !result.assets || !result.assets[0].base64) return;
 
-        <View style={styles.infoRow}>
-          <MaterialCommunityIcons name="motorbike" size={22} color="#60A5FA" />
-          <Text style={styles.label}>Jenis Motor:</Text>
-          <Text style={styles.value}>{userData.bikeType}</Text>
-        </View>
+    setUploading(true);
+    const base64Image = result.assets[0].base64;
 
-        <View style={styles.infoRow}>
-          <Feather name="droplet" size={22} color="#60A5FA" />
-          <Text style={styles.label}>Golongan Darah:</Text>
-          <Text style={styles.value}>{userData.bloodType}</Text>
-        </View>
+    try {
+      const data = new FormData();
+      data.append("file", `data:image/jpeg;base64,${base64Image}`);
+      data.append("upload_preset", CLOUDINARY_UPLOAD_PRESET);
+      data.append("folder", "primelean_profiles");
 
-        <View style={styles.infoRow}>
-          <Feather name="phone-call" size={22} color="#60A5FA" />
-          <Text style={styles.label}>Nomor Darurat:</Text>
-          <Text style={styles.value}>{userData.emergencyPhone}</Text>
-        </View>
-      </View>
+      const response = await fetch(CLOUDINARY_URL, {
+        method: "POST",
+        body: data,
+      });
 
-      <TouchableOpacity
-        style={styles.button}
-        onPress={() => router.push("/editprofile")} // ✅ arahkan ke halaman baru
+      const json = await response.json();
+
+      if (json.secure_url) {
+        const photoURL = json.secure_url;
+        await updateDoc(doc(db, "users", userId!), { photoURL }); // userId pasti ada di sini
+        setProfile({ ...profile, photoURL });
+        Alert.alert("Sukses", "Foto profil berhasil diupdate!");
+      } else {
+        console.error("Cloudinary Response Error:", json);
+        Alert.alert(
+          "Gagal",
+          "Gagal mengunggah foto. Cek konfigurasi Cloudinary Anda."
+        );
+      }
+    } catch (error: any) {
+      console.error("Upload Cloudinary Gagal:", error);
+      Alert.alert("Error", "Terjadi masalah koneksi atau server saat upload.");
+    } finally {
+      setUploading(false);
+    }
+  };
+
+  const handleLogout = async () => {
+    Alert.alert("Logout", "Yakin mau keluar?", [
+      { text: "Batal", style: "cancel" },
+      {
+        text: "Ya",
+        style: "destructive",
+        onPress: async () => {
+          await signOut(auth);
+          router.replace("/login");
+        },
+      },
+    ]);
+  };
+
+  // Tampilkan loading screen jika user belum dimuat
+  if (!user) {
+    return (
+      <View
+        style={[
+          styles.container,
+          { justifyContent: "center", alignItems: "center" },
+        ]}
       >
-        <Text style={styles.buttonText}>Edit Profil</Text>
-      </TouchableOpacity>
-    </ScrollView>
+        <ActivityIndicator size="large" color="#3B82F6" />
+      </View>
+    );
+  }
+
+  return (
+    <>
+      <StatusBar barStyle="light-content" backgroundColor="#0F172A" />
+      <View style={styles.container}>
+        <View style={styles.overlay} pointerEvents="none" />
+        <ScrollView
+          contentContainerStyle={{
+            flexGrow: 1,
+            justifyContent: "center",
+            paddingBottom: 100,
+          }}
+        >
+          {/* Header & Avatar + Upload Button */}
+          <View style={styles.header}>
+            <TouchableOpacity onPress={pickAndUploadImage} disabled={uploading}>
+              <View style={styles.avatarContainer}>
+                {uploading ? (
+                  <ActivityIndicator size="large" color="#3B82F6" />
+                ) : profile?.photoURL ? (
+                  <Image
+                    source={{ uri: profile.photoURL }}
+                    style={styles.avatarImage}
+                  />
+                ) : (
+                  <View style={styles.avatar}>
+                    <Text style={styles.avatarText}>
+                      {profile?.name?.[0]?.toUpperCase() ||
+                        user?.email?.[0]?.toUpperCase() ||
+                        "U"}
+                    </Text>
+                  </View>
+                )}
+                <View style={styles.cameraIcon}>
+                  <Text style={{ fontSize: 20 }}>📷</Text>
+                </View>
+              </View>
+            </TouchableOpacity>
+            <Text style={styles.email}>{user.email}</Text>
+            <Text style={styles.welcome}>Welcome back!</Text>
+          </View>
+
+          {/* Card Profil */}
+          <View style={styles.card}>
+            <Text style={styles.cardTitle}>Informasi Profil</Text>
+            {loading ? (
+              Array(5)
+                .fill(0)
+                .map((_, i) => (
+                  <View key={i} style={styles.skeletonRow}>
+                    <View style={styles.skeletonLabel} />
+                    <View style={styles.skeletonValue} />
+                  </View>
+                ))
+            ) : (
+              <>
+                <InfoRow label="Nama" value={profile?.name || "-"} />
+                <InfoRow label="Alamat" value={profile?.address || "-"} />
+                <InfoRow label="Tipe Motor" value={profile?.bikeType || "-"} />
+                <InfoRow label="Gol. Darah" value={profile?.bloodType || "-"} />
+                <InfoRow
+                  label="No. Darurat"
+                  value={profile?.emergencyPhone || "-"}
+                />
+              </>
+            )}
+          </View>
+
+          {/* Tombol Edit & Logout */}
+          <View style={styles.buttonContainer}>
+            <TouchableOpacity
+              style={styles.editButton}
+              onPress={() => router.push("/editprofile")}
+            >
+              <Text style={styles.buttonText}>Edit Profil</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={styles.logoutButton}
+              onPress={handleLogout}
+            >
+              <Text style={styles.buttonText}>Logout</Text>
+            </TouchableOpacity>
+          </View>
+        </ScrollView>
+      </View>
+    </>
   );
 }
 
 const styles = StyleSheet.create({
-  container: {
-    flexGrow: 1,
-    padding: 20,
-    backgroundColor: "#0F172A",
+  container: { flex: 1, backgroundColor: "#0F172A" },
+  overlay: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: "rgba(30, 41, 59, 0.4)",
   },
-  header: {
+
+  header: { alignItems: "center", paddingTop: 60, paddingBottom: 40 },
+  avatarContainer: { position: "relative" },
+  avatarImage: {
+    width: 160,
+    height: 160,
+    borderRadius: 80,
+    borderWidth: 6,
+    borderColor: "#1E293B",
+  },
+  avatar: {
+    width: 160,
+    height: 160,
+    borderRadius: 80,
+    backgroundColor: "#3B82F6",
+    justifyContent: "center",
+    alignItems: "center",
+    borderWidth: 6,
+    borderColor: "#1E293B",
+    shadowColor: "#3B82F6",
+    shadowOpacity: 0.9,
+    shadowRadius: 30,
+    elevation: 25,
+  },
+  avatarText: { color: "#fff", fontSize: 70, fontWeight: "bold" },
+  cameraIcon: {
+    position: "absolute",
+    bottom: 10,
+    right: 10,
+    backgroundColor: "#fff",
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    justifyContent: "center",
+    alignItems: "center",
+    shadowColor: "#000",
+    shadowOpacity: 0.4,
+    elevation: 10,
+  },
+
+  email: { color: "#94A3B8", marginTop: 20, fontSize: 16 },
+  welcome: { color: "#F8FAFC", fontSize: 28, fontWeight: "bold", marginTop: 8 },
+
+  card: {
+    marginHorizontal: 24,
+    backgroundColor: "rgba(30, 41, 59, 0.95)",
+    borderRadius: 28,
+    padding: 30,
+    borderWidth: 1,
+    borderColor: "rgba(148, 163, 184, 0.3)",
+    shadowColor: "#000",
+    shadowOpacity: 0.5,
+    shadowRadius: 30,
+    elevation: 20,
+  },
+  cardTitle: {
+    color: "#F8FAFC",
     fontSize: 24,
     fontWeight: "bold",
-    color: "#fff",
-    marginBottom: 10,
     textAlign: "center",
-  },
-  photoContainer: {
-    alignItems: "center",
-    marginBottom: 20,
-  },
-  profilePhoto: {
-    width: 100,
-    height: 100,
-    borderRadius: 50,
-    borderWidth: 3,
-    borderColor: "#3B82F6",
-    marginBottom: 10,
-  },
-  userName: {
-    fontSize: 20,
-    fontWeight: "bold",
-    color: "#fff",
-  },
-  card: {
-    backgroundColor: "#1E293B",
-    borderRadius: 12,
-    padding: 20,
     marginBottom: 30,
   },
-  infoRow: {
+
+  row: {
     flexDirection: "row",
-    alignItems: "center",
-    marginBottom: 15,
+    justifyContent: "space-between",
+    marginBottom: 22,
   },
-  label: {
-    color: "#CBD5E1",
-    fontSize: 16,
-    marginLeft: 10,
-    flex: 0.7,
-  },
+  label: { color: "#94A3B8", fontSize: 17, fontWeight: "500" },
   value: {
-    color: "#fff",
-    fontSize: 16,
+    color: "#F8FAFC",
+    fontSize: 18,
     fontWeight: "600",
     flex: 1,
+    textAlign: "right",
+    marginLeft: 20,
   },
-  button: {
+
+  skeletonRow: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    marginBottom: 22,
+  },
+  skeletonLabel: {
+    width: 110,
+    height: 22,
+    backgroundColor: "#334155",
+    borderRadius: 8,
+  },
+  skeletonValue: {
+    width: "55%",
+    height: 22,
+    backgroundColor: "#334155",
+    borderRadius: 8,
+  },
+
+  buttonContainer: { alignItems: "center", marginTop: 50 },
+  editButton: {
+    width: "80%",
     backgroundColor: "#3B82F6",
-    paddingVertical: 14,
-    borderRadius: 10,
+    paddingVertical: 20,
+    borderRadius: 24,
     alignItems: "center",
+    shadowColor: "#3B82F6",
+    shadowOpacity: 0.7,
+    shadowRadius: 25,
+    elevation: 18,
   },
-  buttonText: {
-    color: "#fff",
-    fontSize: 16,
-    fontWeight: "bold",
+  logoutButton: {
+    width: "80%",
+    marginTop: 20,
+    backgroundColor: "#EF4444",
+    paddingVertical: 20,
+    borderRadius: 24,
+    alignItems: "center",
+    shadowColor: "#EF4444",
+    shadowOpacity: 0.7,
+    shadowRadius: 25,
+    elevation: 18,
   },
+  buttonText: { color: "#fff", fontSize: 19, fontWeight: "bold" },
 });
