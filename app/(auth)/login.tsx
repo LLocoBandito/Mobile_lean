@@ -13,7 +13,7 @@ import {
   TouchableOpacity,
   View,
 } from "react-native";
-import { auth } from "../../utils/firebaseConfig";
+import { auth } from "../../utils/firebaseconfig";
 
 const LoginScreen: FC = () => {
   const router = useRouter();
@@ -83,18 +83,8 @@ const LoginScreen: FC = () => {
 
   return (
     <View style={styles.container}>
-<<<<<<< HEAD
-      <Text style={styles.title}>Selamat Datang lagi senggol</Text>
-
-      {errorMessage && (
-        <View style={styles.errorContainer}>
-          <Text style={styles.errorText}>{errorMessage}</Text>
-        </View>
-      )}
-=======
       <Text style={styles.title}>PrimeLean Monitor</Text>
       <Text style={styles.subtitle}>Login untuk melanjutkan</Text>
->>>>>>> 70a9217f1e11c6565e00fbfd463e4f566a6b49d7
 
       <TextInput
         placeholder="Email"

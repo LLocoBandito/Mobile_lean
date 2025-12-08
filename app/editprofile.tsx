@@ -1,24 +1,67 @@
+import { Ionicons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
 import { getAuth } from "firebase/auth";
 import { doc, getDoc, setDoc } from "firebase/firestore";
 import React, { useEffect, useState } from "react";
 import {
+  ActivityIndicator,
   Alert,
+  KeyboardAvoidingView,
+  Platform,
   ScrollView,
+  StatusBar,
   StyleSheet,
   Text,
   TextInput,
   TouchableOpacity,
   View,
 } from "react-native";
-import { db } from "../utils/firebaseConfig";
+import { db } from "../utils/firebaseconfig"; // Sesuaikan path jika perlu
+
+// Komponen Input Kustom agar kode lebih rapi
+const CustomInput = ({
+  label,
+  value,
+  onChangeText,
+  icon,
+  placeholder,
+  keyboardType = "default",
+  multiline = false,
+}: {
+  label: string;
+  value: string;
+  onChangeText: (text: string) => void;
+  icon: keyof typeof Ionicons.glyphMap;
+  placeholder: string;
+  keyboardType?: any;
+  multiline?: boolean;
+}) => (
+  <View style={styles.inputGroup}>
+    <Text style={styles.label}>{label}</Text>
+    <View style={[styles.inputContainer, multiline && styles.inputContainerMulti]}>
+      <Ionicons name={icon} size={20} color="#64748B" style={styles.inputIcon} />
+      <TextInput
+        style={[styles.input, multiline && styles.inputMulti]}
+        value={value}
+        onChangeText={onChangeText}
+        placeholder={placeholder}
+        placeholderTextColor="#64748B"
+        keyboardType={keyboardType}
+        multiline={multiline}
+        textAlignVertical={multiline ? "top" : "center"}
+      />
+    </View>
+  </View>
+);
 
 export default function EditProfileScreen() {
   const router = useRouter();
   const auth = getAuth();
   const user = auth.currentUser;
-  const userId = user?.uid || "user_1";
+  const userId = user?.uid;
 
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
   const [formData, setFormData] = useState({
     name: "",
     address: "",
@@ -27,129 +70,266 @@ export default function EditProfileScreen() {
     emergencyPhone: "",
   });
 
-  // 🔹 Fetch user data from Firestore when the page is opened
+  // 🔹 Fetch user data
   useEffect(() => {
     const fetchProfile = async () => {
+      if (!userId) return;
       try {
         const docRef = doc(db, "users", userId);
         const snapshot = await getDoc(docRef);
         if (snapshot.exists()) {
-          setFormData(snapshot.data() as typeof formData);
-        } else {
-          console.log("Profile data does not exist in Firestore yet.");
+          // Merge data yang ada dengan default state untuk menghindari error undefined
+          setFormData((prev) => ({ ...prev, ...snapshot.data() }));
         }
       } catch (error) {
         console.error("Failed to load profile:", error);
+        Alert.alert("Error", "Gagal memuat data profil.");
+      } finally {
+        setLoading(false);
       }
     };
 
     fetchProfile();
-  }, []);
+  }, [userId]);
 
   const handleChange = (field: string, value: string) => {
     setFormData({ ...formData, [field]: value });
   };
 
   const handleSave = async () => {
+    if (!userId) return;
+    setSaving(true);
     try {
       await setDoc(doc(db, "users", userId), formData, { merge: true });
-      Alert.alert("Success!", "Your profile has been updated successfully 🎉");
-      router.replace("/(tabs)/profile"); // go back to the profile page
+      Alert.alert("Berhasil", "Profil Anda berhasil diperbarui! 🎉", [
+        { text: "OK", onPress: () => router.back() },
+      ]);
     } catch (error) {
       console.error("Failed to save:", error);
-      Alert.alert("Error", "Failed to save profile to the database.");
+      Alert.alert("Error", "Gagal menyimpan perubahan.");
+    } finally {
+      setSaving(false);
     }
   };
 
   const handleCancel = () => {
-    Alert.alert("Discard Changes?", "All unsaved changes will be lost.", [
-      { text: "No", style: "cancel" },
-      { text: "Yes", onPress: () => router.back(), style: "destructive" },
+    Alert.alert("Batalkan Perubahan?", "Perubahan yang belum disimpan akan hilang.", [
+      { text: "Lanjut Mengedit", style: "cancel" },
+      { text: "Ya, Keluar", onPress: () => router.back(), style: "destructive" },
     ]);
   };
 
-  // Helper function for translating keys
-  const getLabel = (key: string) => {
-    switch (key) {
-      case "name":
-        return "Name";
-      case "address":
-        return "Address";
-      case "bikeType":
-        return "Bike Type";
-      case "bloodType":
-        return "Blood Type";
-      case "emergencyPhone":
-        return "Emergency Number";
-      default:
-        return key;
-    }
-  };
+  if (loading) {
+    return (
+      <View style={[styles.container, styles.centerContent]}>
+        <ActivityIndicator size="large" color="#3B82F6" />
+      </View>
+    );
+  }
 
   return (
-    <ScrollView contentContainerStyle={styles.container}>
-      <Text style={styles.header}>Edit Profile</Text>
+    <View style={styles.container}>
+      <StatusBar barStyle="light-content" backgroundColor="#0F172A" />
+      
+      {/* Header Sederhana */}
+      <View style={styles.header}>
+        <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
+          <Ionicons name="arrow-back" size={24} color="#FFF" />
+        </TouchableOpacity>
+        <Text style={styles.headerTitle}>Edit Profile</Text>
+        <View style={{ width: 40 }} /> 
+      </View>
 
-      {Object.keys(formData).map((key) => (
-        <View key={key} style={styles.inputGroup}>
-          <Text style={styles.label}>{getLabel(key)}</Text>
-          <TextInput
-            style={styles.input}
-            value={formData[key as keyof typeof formData]}
-            onChangeText={(text) => handleChange(key, text)}
-            placeholder={`Enter ${getLabel(key).toLowerCase()}`}
-            placeholderTextColor="#94A3B8"
-            // Special keyboard for emergency phone
-            keyboardType={key === "emergencyPhone" ? "phone-pad" : "default"}
+      <KeyboardAvoidingView
+        behavior={Platform.OS === "ios" ? "padding" : "height"}
+        style={{ flex: 1 }}
+      >
+        <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
+          
+          <Text style={styles.sectionTitle}>Informasi Pribadi</Text>
+
+          <CustomInput
+            label="Nama Lengkap"
+            value={formData.name}
+            onChangeText={(text) => handleChange("name", text)}
+            icon="person-outline"
+            placeholder="Contoh: John Doe"
           />
-        </View>
-      ))}
 
-      <TouchableOpacity style={styles.saveButton} onPress={handleSave}>
-        <Text style={styles.saveButtonText}>Save Changes</Text>
-      </TouchableOpacity>
+          <CustomInput
+            label="Alamat Domisili"
+            value={formData.address}
+            onChangeText={(text) => handleChange("address", text)}
+            icon="location-outline"
+            placeholder="Masukkan alamat lengkap"
+            multiline={true}
+          />
 
-      <TouchableOpacity style={styles.cancelButton} onPress={handleCancel}>
-        <Text style={styles.cancelButtonText}>Cancel</Text>
-      </TouchableOpacity>
-    </ScrollView>
+          <View style={styles.row}>
+            <View style={{ flex: 1, marginRight: 10 }}>
+              <CustomInput
+                label="Tipe Motor"
+                value={formData.bikeType}
+                onChangeText={(text) => handleChange("bikeType", text)}
+                icon="bicycle-outline"
+                placeholder="Ex: Vario"
+              />
+            </View>
+            <View style={{ flex: 1 }}>
+              <CustomInput
+                label="Gol. Darah"
+                value={formData.bloodType}
+                onChangeText={(text) => handleChange("bloodType", text)}
+                icon="water-outline"
+                placeholder="Ex: O+"
+              />
+            </View>
+          </View>
+
+          <Text style={[styles.sectionTitle, { marginTop: 10 }]}>Kontak Darurat</Text>
+          <CustomInput
+            label="Nomor Telepon Darurat"
+            value={formData.emergencyPhone}
+            onChangeText={(text) => handleChange("emergencyPhone", text)}
+            icon="medkit-outline"
+            placeholder="0812-xxxx-xxxx"
+            keyboardType="phone-pad"
+          />
+
+          {/* Tombol Aksi */}
+          <View style={styles.actionContainer}>
+            <TouchableOpacity 
+              style={styles.saveButton} 
+              onPress={handleSave}
+              disabled={saving}
+            >
+              {saving ? (
+                <ActivityIndicator color="#FFF" />
+              ) : (
+                <>
+                  <Ionicons name="save-outline" size={20} color="#FFF" style={{ marginRight: 8 }} />
+                  <Text style={styles.saveButtonText}>Simpan Perubahan</Text>
+                </>
+              )}
+            </TouchableOpacity>
+
+            <TouchableOpacity style={styles.cancelButton} onPress={handleCancel} disabled={saving}>
+              <Text style={styles.cancelButtonText}>Batal</Text>
+            </TouchableOpacity>
+          </View>
+
+        </ScrollView>
+      </KeyboardAvoidingView>
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
   container: {
-    flexGrow: 1,
-    padding: 20,
+    flex: 1,
     backgroundColor: "#0F172A",
   },
+  centerContent: {
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  scrollContent: {
+    padding: 24,
+    paddingBottom: 50,
+  },
+  
+  // Header
   header: {
-    fontSize: 24,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    paddingHorizontal: 20,
+    paddingTop: 60, // Adjust for notch
+    paddingBottom: 20,
+    backgroundColor: "#0F172A",
+    borderBottomWidth: 1,
+    borderBottomColor: "#1E293B",
+  },
+  backButton: {
+    padding: 8,
+    borderRadius: 12,
+    backgroundColor: "#1E293B",
+  },
+  headerTitle: {
+    fontSize: 20,
     fontWeight: "bold",
-    color: "#fff",
-    textAlign: "center",
+    color: "#F8FAFC",
+  },
+
+  // Form Styles
+  sectionTitle: {
+    color: "#94A3B8",
+    fontSize: 14,
+    fontWeight: "600",
     marginBottom: 20,
+    textTransform: "uppercase",
+    letterSpacing: 1,
   },
   inputGroup: {
-    marginBottom: 15,
+    marginBottom: 20,
   },
   label: {
-    color: "#CBD5E1",
-    fontSize: 16,
-    marginBottom: 6,
+    color: "#E2E8F0",
+    fontSize: 14,
+    fontWeight: "500",
+    marginBottom: 8,
+    marginLeft: 4,
+  },
+  inputContainer: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: "#1E293B",
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: "#334155",
+    paddingHorizontal: 16,
+    height: 56,
+  },
+  inputContainerMulti: {
+    height: 100,
+    alignItems: "flex-start",
+    paddingTop: 16,
+  },
+  inputIcon: {
+    marginRight: 12,
   },
   input: {
-    backgroundColor: "#1E293B",
-    color: "#fff",
-    borderRadius: 10,
-    padding: 12,
+    flex: 1,
+    color: "#F8FAFC",
     fontSize: 16,
+    height: "100%",
+  },
+  inputMulti: {
+    height: "100%",
+    textAlignVertical: "top",
+  },
+  row: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+  },
+
+  // Buttons
+  actionContainer: {
+    marginTop: 30,
+    gap: 16,
   },
   saveButton: {
     backgroundColor: "#3B82F6",
-    paddingVertical: 14,
-    borderRadius: 10,
+    flexDirection: "row",
+    justifyContent: "center",
     alignItems: "center",
-    marginTop: 20,
+    paddingVertical: 18,
+    borderRadius: 16,
+    shadowColor: "#3B82F6",
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 10,
+    elevation: 6,
   },
   saveButtonText: {
     color: "#fff",
@@ -157,14 +337,15 @@ const styles = StyleSheet.create({
     fontWeight: "bold",
   },
   cancelButton: {
-    backgroundColor: "#475569",
-    paddingVertical: 14,
-    borderRadius: 10,
+    backgroundColor: "transparent",
+    paddingVertical: 16,
+    borderRadius: 16,
     alignItems: "center",
-    marginTop: 10,
+    borderWidth: 1,
+    borderColor: "#475569",
   },
   cancelButtonText: {
-    color: "#E2E8F0",
+    color: "#94A3B8",
     fontSize: 16,
     fontWeight: "600",
   },
