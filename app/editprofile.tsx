@@ -16,7 +16,7 @@ import {
   TouchableOpacity,
   View,
 } from "react-native";
-import { db } from "../utils/firebaseconfig"; // Sesuaikan path jika perlu
+import { db } from "../utils/firebaseConfig"; // Sesuaikan path jika perlu
 
 // Komponen Input Kustom agar kode lebih rapi
 const CustomInput = ({
@@ -38,8 +38,15 @@ const CustomInput = ({
 }) => (
   <View style={styles.inputGroup}>
     <Text style={styles.label}>{label}</Text>
-    <View style={[styles.inputContainer, multiline && styles.inputContainerMulti]}>
-      <Ionicons name={icon} size={20} color="#64748B" style={styles.inputIcon} />
+    <View
+      style={[styles.inputContainer, multiline && styles.inputContainerMulti]}
+    >
+      <Ionicons
+        name={icon}
+        size={20}
+        color="#64748B"
+        style={styles.inputIcon}
+      />
       <TextInput
         style={[styles.input, multiline && styles.inputMulti]}
         value={value}
@@ -113,10 +120,18 @@ export default function EditProfileScreen() {
   };
 
   const handleCancel = () => {
-    Alert.alert("Batalkan Perubahan?", "Perubahan yang belum disimpan akan hilang.", [
-      { text: "Lanjut Mengedit", style: "cancel" },
-      { text: "Ya, Keluar", onPress: () => router.back(), style: "destructive" },
-    ]);
+    Alert.alert(
+      "Batalkan Perubahan?",
+      "Perubahan yang belum disimpan akan hilang.",
+      [
+        { text: "Lanjut Mengedit", style: "cancel" },
+        {
+          text: "Ya, Keluar",
+          onPress: () => router.back(),
+          style: "destructive",
+        },
+      ]
+    );
   };
 
   if (loading) {
@@ -130,22 +145,27 @@ export default function EditProfileScreen() {
   return (
     <View style={styles.container}>
       <StatusBar barStyle="light-content" backgroundColor="#0F172A" />
-      
+
       {/* Header Sederhana */}
       <View style={styles.header}>
-        <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
+        <TouchableOpacity
+          onPress={() => router.back()}
+          style={styles.backButton}
+        >
           <Ionicons name="arrow-back" size={24} color="#FFF" />
         </TouchableOpacity>
         <Text style={styles.headerTitle}>Edit Profile</Text>
-        <View style={{ width: 40 }} /> 
+        <View style={{ width: 40 }} />
       </View>
 
       <KeyboardAvoidingView
         behavior={Platform.OS === "ios" ? "padding" : "height"}
         style={{ flex: 1 }}
       >
-        <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
-          
+        <ScrollView
+          contentContainerStyle={styles.scrollContent}
+          showsVerticalScrollIndicator={false}
+        >
           <Text style={styles.sectionTitle}>Informasi Pribadi</Text>
 
           <CustomInput
@@ -186,7 +206,9 @@ export default function EditProfileScreen() {
             </View>
           </View>
 
-          <Text style={[styles.sectionTitle, { marginTop: 10 }]}>Kontak Darurat</Text>
+          <Text style={[styles.sectionTitle, { marginTop: 10 }]}>
+            Kontak Darurat
+          </Text>
           <CustomInput
             label="Nomor Telepon Darurat"
             value={formData.emergencyPhone}
@@ -198,8 +220,8 @@ export default function EditProfileScreen() {
 
           {/* Tombol Aksi */}
           <View style={styles.actionContainer}>
-            <TouchableOpacity 
-              style={styles.saveButton} 
+            <TouchableOpacity
+              style={styles.saveButton}
               onPress={handleSave}
               disabled={saving}
             >
@@ -207,17 +229,25 @@ export default function EditProfileScreen() {
                 <ActivityIndicator color="#FFF" />
               ) : (
                 <>
-                  <Ionicons name="save-outline" size={20} color="#FFF" style={{ marginRight: 8 }} />
+                  <Ionicons
+                    name="save-outline"
+                    size={20}
+                    color="#FFF"
+                    style={{ marginRight: 8 }}
+                  />
                   <Text style={styles.saveButtonText}>Simpan Perubahan</Text>
                 </>
               )}
             </TouchableOpacity>
 
-            <TouchableOpacity style={styles.cancelButton} onPress={handleCancel} disabled={saving}>
+            <TouchableOpacity
+              style={styles.cancelButton}
+              onPress={handleCancel}
+              disabled={saving}
+            >
               <Text style={styles.cancelButtonText}>Batal</Text>
             </TouchableOpacity>
           </View>
-
         </ScrollView>
       </KeyboardAvoidingView>
     </View>
@@ -237,7 +267,7 @@ const styles = StyleSheet.create({
     padding: 24,
     paddingBottom: 50,
   },
-  
+
   // Header
   header: {
     flexDirection: "row",

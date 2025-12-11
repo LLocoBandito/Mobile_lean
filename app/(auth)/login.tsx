@@ -13,7 +13,7 @@ import {
   TouchableOpacity,
   View,
 } from "react-native";
-import { auth } from "../../utils/firebaseconfig";
+import { auth } from "../../utils/firebaseConfig";
 
 const LoginScreen: FC = () => {
   const router = useRouter();

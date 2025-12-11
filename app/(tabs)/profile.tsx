@@ -17,7 +17,7 @@ import {
 } from "react-native";
 // Import Icon untuk UI yang lebih cantik
 import { Ionicons } from "@expo/vector-icons";
-import { auth, db } from "../../utils/firebaseconfig";
+import { auth, db } from "../../utils/firebaseConfig";
 
 // =========================================================
 // ⚡ KONFIGURASI CLOUDINARY ⚡
@@ -164,18 +164,18 @@ export default function ProfileScreen() {
   return (
     <View style={styles.container}>
       <StatusBar barStyle="light-content" backgroundColor="#0F172A" />
-      
+
       {/* Background Decorative Elements */}
       <View style={styles.bgCircleTop} />
-      
+
       <ScrollView
         showsVerticalScrollIndicator={false}
         contentContainerStyle={styles.scrollContent}
       >
         {/* Header Section */}
         <View style={styles.headerContainer}>
-          <TouchableOpacity 
-            onPress={pickAndUploadImage} 
+          <TouchableOpacity
+            onPress={pickAndUploadImage}
             disabled={uploading}
             activeOpacity={0.8}
             style={styles.avatarWrapper}
@@ -205,46 +205,48 @@ export default function ProfileScreen() {
             </View>
           </TouchableOpacity>
 
-          <Text style={styles.welcomeText}>Hello, {profile?.name?.split(" ")[0] || "User"}!</Text>
+          <Text style={styles.welcomeText}>
+            Hello, {profile?.name?.split(" ")[0] || "User"}!
+          </Text>
           <Text style={styles.emailText}>{user.email}</Text>
         </View>
 
         {/* Info Card */}
         <View style={styles.cardContainer}>
           <Text style={styles.sectionTitle}>Personal Data</Text>
-          
+
           {loading ? (
             <ActivityIndicator color="#3B82F6" style={{ margin: 20 }} />
           ) : (
             <View style={styles.infoGroup}>
-              <InfoRow 
-                label="Nama Lengkap" 
-                value={profile?.name || "-"} 
-                icon="person-outline" 
+              <InfoRow
+                label="Nama Lengkap"
+                value={profile?.name || "-"}
+                icon="person-outline"
               />
               <View style={styles.divider} />
-              
-              <InfoRow 
-                label="Alamat" 
-                value={profile?.address || "-"} 
-                icon="location-outline" 
+
+              <InfoRow
+                label="Alamat"
+                value={profile?.address || "-"}
+                icon="location-outline"
               />
               <View style={styles.divider} />
-              
-              <InfoRow 
-                label="Tipe Motor" 
-                value={profile?.bikeType || "-"} 
-                icon="bicycle-outline" 
+
+              <InfoRow
+                label="Tipe Motor"
+                value={profile?.bikeType || "-"}
+                icon="bicycle-outline"
               />
               <View style={styles.divider} />
-              
-              <InfoRow 
-                label="Gol. Darah" 
-                value={profile?.bloodType || "-"} 
-                icon="water-outline" 
+
+              <InfoRow
+                label="Gol. Darah"
+                value={profile?.bloodType || "-"}
+                icon="water-outline"
               />
               <View style={styles.divider} />
-              
+
               <InfoRow
                 label="No. Darurat"
                 value={profile?.emergencyPhone || "-"}
@@ -260,7 +262,12 @@ export default function ProfileScreen() {
             style={styles.primaryButton}
             onPress={() => router.push("/editprofile")}
           >
-            <Ionicons name="create-outline" size={22} color="#FFF" style={{ marginRight: 8 }} />
+            <Ionicons
+              name="create-outline"
+              size={22}
+              color="#FFF"
+              style={{ marginRight: 8 }}
+            />
             <Text style={styles.primaryButtonText}>Edit Profil</Text>
           </TouchableOpacity>
 
@@ -268,7 +275,12 @@ export default function ProfileScreen() {
             style={styles.secondaryButton}
             onPress={handleLogout}
           >
-            <Ionicons name="log-out-outline" size={22} color="#EF4444" style={{ marginRight: 8 }} />
+            <Ionicons
+              name="log-out-outline"
+              size={22}
+              color="#EF4444"
+              style={{ marginRight: 8 }}
+            />
             <Text style={styles.secondaryButtonText}>Logout</Text>
           </TouchableOpacity>
         </View>
@@ -301,7 +313,7 @@ const styles = StyleSheet.create({
   scrollContent: {
     paddingBottom: 40,
   },
-  
+
   // Header Styles
   headerContainer: {
     alignItems: "center",
