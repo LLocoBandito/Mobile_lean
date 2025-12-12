@@ -38,22 +38,31 @@ export default function Manage() {
   const [modalVisible, setModalVisible] = useState(false);
   const [inputName, setInputName] = useState("");
   const [dataList, setDataList] = useState<MonitoringSession[]>([]);
-  const [loading, setLoading] = useState(true);
   const [selectedSession, setSelectedSession] =
     useState<MonitoringSession | null>(null);
 
+  // 🔥 STATE BARU UNTUK LOADING DAN REFRESH
+  const [initialLoading, setInitialLoading] = useState(true);
+  const [isRefreshing, setIsRefreshing] = useState(false);
+
   // === FUNGSI FETCH DATA DENGAN FILTER USER ID ===
-  const fetchData = useCallback(async () => {
+  const fetchData = useCallback(async (isInitialLoad: boolean = false) => {
     const user = auth.currentUser;
-    // Jika user belum login, langsung berhenti.
+
     if (!user) {
       setDataList([]);
-      setLoading(false);
+      setInitialLoading(false);
+      setIsRefreshing(false);
       return;
     }
 
     try {
-      setLoading(true);
+      // Atur state loading yang benar
+      if (isInitialLoad) {
+        setInitialLoading(true);
+      } else {
+        setIsRefreshing(true);
+      }
 
       // Query: Ambil hanya sesi yang dimiliki oleh pengguna yang sedang login
       const sessionsRef = collection(db, "monitoring_sessions");
@@ -70,7 +79,6 @@ export default function Manage() {
           sessionName: data.sessionName || "Sesi Tanpa Nama",
           startPoint: data.startPoint,
           totalPoints: data.totalPoints || 0,
-          // Gunakan data.createdAt untuk sorting yang konsisten
           createdAt:
             data.createdAt ||
             new Date(data.startPoint?.timestamp || 0).toISOString(),
@@ -91,13 +99,20 @@ export default function Manage() {
         "Gagal memuat data dari database. Periksa koneksi atau Firestore Rules."
       );
     } finally {
-      setLoading(false);
+      // Matikan semua indikator loading
+      setInitialLoading(false);
+      setIsRefreshing(false);
     }
   }, []);
 
   useEffect(() => {
-    fetchData();
+    fetchData(true); // Panggil dengan flag untuk pemuatan awal (initialLoad)
   }, [fetchData]);
+
+  // 🔥 HANDLER REFRESH
+  const handleRefresh = () => {
+    fetchData(false); // Panggil fetchData tanpa isInitialLoad=true
+  };
 
   // --- HANDLER HAPUS DATA ---
   const handleDelete = (id: string) => {
@@ -208,7 +223,8 @@ export default function Manage() {
           <Text style={styles.subtitle}>Kelola semua sesi monitoring kamu</Text>
         </View>
 
-        {loading ? (
+        {/* 🔥 Gunakan initialLoading untuk Pemuatan Awal */}
+        {initialLoading ? (
           <View style={styles.loadingContainer}>
             <ActivityIndicator size="large" color="#60A5FA" />
             <Text style={styles.loadingText}>Memuat data sesi...</Text>
@@ -234,6 +250,9 @@ export default function Manage() {
             renderItem={renderItem}
             contentContainerStyle={{ paddingBottom: 100 }}
             showsVerticalScrollIndicator={false}
+            // 🔥 Properti Pull-to-Refresh
+            refreshing={isRefreshing}
+            onRefresh={handleRefresh}
           />
         )}
 
