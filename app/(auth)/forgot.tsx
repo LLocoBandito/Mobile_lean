@@ -1,7 +1,7 @@
 import { useRouter } from "expo-router";
 import React, { useState } from "react";
 import { Alert, StyleSheet, Text, TouchableOpacity, View } from "react-native";
-import AuthButton from "../../components/buttonprimary";
+import AuthButton from "../../components/PrimaryButton";
 import AuthInput from "../../components/inputfield";
 import { handlePasswordReset } from "../../utils/login_handler";
 

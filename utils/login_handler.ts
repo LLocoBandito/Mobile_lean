@@ -5,7 +5,7 @@ import {
   updateProfile, // Diperlukan untuk setting displayName
 } from "firebase/auth";
 import { doc, setDoc } from "firebase/firestore"; // Diperlukan untuk menyimpan ke Firestore
-import { auth, db } from "../utils/firebaseconfig"; // Pastikan 'db' diimpor dari file config Anda
+import { auth, db } from "./firebaseConfig"; // Pastikan 'db' diimpor dari file config Anda
 
 /**
  * Fungsi untuk mendaftarkan user baru dengan Email, Password, dan Nama.
