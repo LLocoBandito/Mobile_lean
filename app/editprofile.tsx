@@ -16,9 +16,12 @@ import {
   TouchableOpacity,
   View,
 } from "react-native";
-import { db } from "../utils/firebaseConfig"; // Sesuaikan path jika perlu
+import { db } from "../utils/firebaseConfig";
 
-// Komponen Input Kustom agar kode lebih rapi
+import PrimaryButton from "../components/PrimaryButton";
+import SecondaryButton from "../components/SecondaryButton";
+
+// Input Component
 const CustomInput = ({
   label,
   value,
@@ -77,7 +80,6 @@ export default function EditProfileScreen() {
     emergencyPhone: "",
   });
 
-  // 🔹 Fetch user data
   useEffect(() => {
     const fetchProfile = async () => {
       if (!userId) return;
@@ -85,11 +87,9 @@ export default function EditProfileScreen() {
         const docRef = doc(db, "users", userId);
         const snapshot = await getDoc(docRef);
         if (snapshot.exists()) {
-          // Merge data yang ada dengan default state untuk menghindari error undefined
           setFormData((prev) => ({ ...prev, ...snapshot.data() }));
         }
       } catch (error) {
-        console.error("Failed to load profile:", error);
         Alert.alert("Error", "Gagal memuat data profil.");
       } finally {
         setLoading(false);
@@ -108,11 +108,10 @@ export default function EditProfileScreen() {
     setSaving(true);
     try {
       await setDoc(doc(db, "users", userId), formData, { merge: true });
-      Alert.alert("Berhasil", "Profil Anda berhasil diperbarui! 🎉", [
+      Alert.alert("Berhasil", "Profil berhasil diperbarui!", [
         { text: "OK", onPress: () => router.back() },
       ]);
     } catch (error) {
-      console.error("Failed to save:", error);
       Alert.alert("Error", "Gagal menyimpan perubahan.");
     } finally {
       setSaving(false);
@@ -121,12 +120,12 @@ export default function EditProfileScreen() {
 
   const handleCancel = () => {
     Alert.alert(
-      "Batalkan Perubahan?",
+      "Batalkan Edit?",
       "Perubahan yang belum disimpan akan hilang.",
       [
         { text: "Lanjut Mengedit", style: "cancel" },
         {
-          text: "Ya, Keluar",
+          text: "Ya, keluar",
           onPress: () => router.back(),
           style: "destructive",
         },
@@ -146,7 +145,7 @@ export default function EditProfileScreen() {
     <View style={styles.container}>
       <StatusBar barStyle="light-content" backgroundColor="#0F172A" />
 
-      {/* Header Sederhana */}
+      {/* Header */}
       <View style={styles.header}>
         <TouchableOpacity
           onPress={() => router.back()}
@@ -162,27 +161,24 @@ export default function EditProfileScreen() {
         behavior={Platform.OS === "ios" ? "padding" : "height"}
         style={{ flex: 1 }}
       >
-        <ScrollView
-          contentContainerStyle={styles.scrollContent}
-          showsVerticalScrollIndicator={false}
-        >
+        <ScrollView contentContainerStyle={styles.scrollContent}>
           <Text style={styles.sectionTitle}>Informasi Pribadi</Text>
 
           <CustomInput
             label="Nama Lengkap"
             value={formData.name}
-            onChangeText={(text) => handleChange("name", text)}
+            onChangeText={(t) => handleChange("name", t)}
             icon="person-outline"
-            placeholder="Contoh: John Doe"
+            placeholder="John Doe"
           />
 
           <CustomInput
-            label="Alamat Domisili"
+            label="Alamat"
             value={formData.address}
-            onChangeText={(text) => handleChange("address", text)}
+            onChangeText={(t) => handleChange("address", t)}
             icon="location-outline"
-            placeholder="Masukkan alamat lengkap"
-            multiline={true}
+            placeholder="Alamat Lengkap"
+            multiline
           />
 
           <View style={styles.row}>
@@ -190,18 +186,19 @@ export default function EditProfileScreen() {
               <CustomInput
                 label="Tipe Motor"
                 value={formData.bikeType}
-                onChangeText={(text) => handleChange("bikeType", text)}
+                onChangeText={(t) => handleChange("bikeType", t)}
                 icon="bicycle-outline"
-                placeholder="Ex: Vario"
+                placeholder="Vario"
               />
             </View>
+
             <View style={{ flex: 1 }}>
               <CustomInput
                 label="Gol. Darah"
                 value={formData.bloodType}
-                onChangeText={(text) => handleChange("bloodType", text)}
+                onChangeText={(t) => handleChange("bloodType", t)}
                 icon="water-outline"
-                placeholder="Ex: O+"
+                placeholder="O+"
               />
             </View>
           </View>
@@ -210,43 +207,24 @@ export default function EditProfileScreen() {
             Kontak Darurat
           </Text>
           <CustomInput
-            label="Nomor Telepon Darurat"
+            label="Nomor Telepon"
             value={formData.emergencyPhone}
-            onChangeText={(text) => handleChange("emergencyPhone", text)}
+            onChangeText={(t) => handleChange("emergencyPhone", t)}
             icon="medkit-outline"
-            placeholder="0812-xxxx-xxxx"
+            placeholder="08xx"
             keyboardType="phone-pad"
           />
 
-          {/* Tombol Aksi */}
-          <View style={styles.actionContainer}>
-            <TouchableOpacity
-              style={styles.saveButton}
+          {/* Reusable Buttons */}
+          <View style={{ marginTop: 30, gap: 16 }}>
+            <PrimaryButton
+              text="Simpan Perubahan"
               onPress={handleSave}
-              disabled={saving}
-            >
-              {saving ? (
-                <ActivityIndicator color="#FFF" />
-              ) : (
-                <>
-                  <Ionicons
-                    name="save-outline"
-                    size={20}
-                    color="#FFF"
-                    style={{ marginRight: 8 }}
-                  />
-                  <Text style={styles.saveButtonText}>Simpan Perubahan</Text>
-                </>
-              )}
-            </TouchableOpacity>
+              loading={saving}
+              icon="save-outline"
+            />
 
-            <TouchableOpacity
-              style={styles.cancelButton}
-              onPress={handleCancel}
-              disabled={saving}
-            >
-              <Text style={styles.cancelButtonText}>Batal</Text>
-            </TouchableOpacity>
+            <SecondaryButton title="Batal" onPress={handleCancel} />
           </View>
         </ScrollView>
       </KeyboardAvoidingView>
@@ -255,27 +233,17 @@ export default function EditProfileScreen() {
 }
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: "#0F172A",
-  },
-  centerContent: {
-    justifyContent: "center",
-    alignItems: "center",
-  },
-  scrollContent: {
-    padding: 24,
-    paddingBottom: 50,
-  },
+  container: { flex: 1, backgroundColor: "#0F172A" },
+  centerContent: { justifyContent: "center", alignItems: "center" },
+  scrollContent: { padding: 24, paddingBottom: 60 },
 
-  // Header
   header: {
     flexDirection: "row",
-    alignItems: "center",
     justifyContent: "space-between",
-    paddingHorizontal: 20,
-    paddingTop: 60, // Adjust for notch
+    alignItems: "center",
+    paddingTop: 60,
     paddingBottom: 20,
+    paddingHorizontal: 20,
     backgroundColor: "#0F172A",
     borderBottomWidth: 1,
     borderBottomColor: "#1E293B",
@@ -286,97 +254,39 @@ const styles = StyleSheet.create({
     backgroundColor: "#1E293B",
   },
   headerTitle: {
+    color: "#FFF",
     fontSize: 20,
-    fontWeight: "bold",
-    color: "#F8FAFC",
+    fontWeight: "700",
   },
 
-  // Form Styles
   sectionTitle: {
     color: "#94A3B8",
-    fontSize: 14,
-    fontWeight: "600",
-    marginBottom: 20,
-    textTransform: "uppercase",
+    fontSize: 12,
+    fontWeight: "700",
+    marginBottom: 15,
     letterSpacing: 1,
+    textTransform: "uppercase",
   },
-  inputGroup: {
-    marginBottom: 20,
-  },
-  label: {
-    color: "#E2E8F0",
-    fontSize: 14,
-    fontWeight: "500",
-    marginBottom: 8,
-    marginLeft: 4,
-  },
+
+  inputGroup: { marginBottom: 20 },
+  label: { color: "#E2E8F0", marginBottom: 8, fontSize: 14 },
   inputContainer: {
     flexDirection: "row",
-    alignItems: "center",
     backgroundColor: "#1E293B",
     borderRadius: 16,
     borderWidth: 1,
     borderColor: "#334155",
     paddingHorizontal: 16,
     height: 56,
+    alignItems: "center",
   },
   inputContainerMulti: {
     height: 100,
     alignItems: "flex-start",
     paddingTop: 16,
   },
-  inputIcon: {
-    marginRight: 12,
-  },
-  input: {
-    flex: 1,
-    color: "#F8FAFC",
-    fontSize: 16,
-    height: "100%",
-  },
-  inputMulti: {
-    height: "100%",
-    textAlignVertical: "top",
-  },
-  row: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-  },
-
-  // Buttons
-  actionContainer: {
-    marginTop: 30,
-    gap: 16,
-  },
-  saveButton: {
-    backgroundColor: "#3B82F6",
-    flexDirection: "row",
-    justifyContent: "center",
-    alignItems: "center",
-    paddingVertical: 18,
-    borderRadius: 16,
-    shadowColor: "#3B82F6",
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.3,
-    shadowRadius: 10,
-    elevation: 6,
-  },
-  saveButtonText: {
-    color: "#fff",
-    fontSize: 16,
-    fontWeight: "bold",
-  },
-  cancelButton: {
-    backgroundColor: "transparent",
-    paddingVertical: 16,
-    borderRadius: 16,
-    alignItems: "center",
-    borderWidth: 1,
-    borderColor: "#475569",
-  },
-  cancelButtonText: {
-    color: "#94A3B8",
-    fontSize: 16,
-    fontWeight: "600",
-  },
+  inputIcon: { marginRight: 12 },
+  input: { flex: 1, color: "#FFF", fontSize: 16 },
+  inputMulti: { textAlignVertical: "top" },
+  row: { flexDirection: "row" },
 });

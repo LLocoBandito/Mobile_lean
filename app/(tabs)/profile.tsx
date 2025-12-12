@@ -1,4 +1,9 @@
 import * as ImagePicker from "expo-image-picker";
+// ==== IMPORT BUTTON REUSABLE ====
+import PrimaryButton from "../../components/PrimaryButton";
+import SecondaryButton from "../../components/SecondaryButton";
+
+import { Ionicons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
 import { signOut } from "firebase/auth";
 import { doc, getDoc, updateDoc } from "firebase/firestore";
@@ -15,8 +20,6 @@ import {
   TouchableOpacity,
   View,
 } from "react-native";
-// Import Icon untuk UI yang lebih cantik
-import { Ionicons } from "@expo/vector-icons";
 import { auth, db } from "../../utils/firebaseConfig";
 
 // =========================================================
@@ -29,7 +32,7 @@ const CLOUDINARY_URL = `https://api.cloudinary.com/v1_1/${CLOUDINARY_CLOUD_NAME}
 
 const { width } = Dimensions.get("window");
 
-// --- Komponen Pembantu InfoRow yang Dipercantik ---
+// --- Komponen InfoRow ---
 const InfoRow = ({
   label,
   value,
@@ -86,7 +89,7 @@ export default function ProfileScreen() {
     fetchProfile();
   }, [user]);
 
-  // 🔥 FUNGSI UPLOAD KE CLOUDINARY 🔥
+  // 🔥 UPLOAD CLOUDINARY
   const pickAndUploadImage = async () => {
     const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
     if (!permission.granted) {
@@ -110,7 +113,6 @@ export default function ProfileScreen() {
       const data = new FormData();
       data.append("file", `data:image/jpeg;base64,${base64Image}`);
       data.append("upload_preset", CLOUDINARY_UPLOAD_PRESET);
-      data.append("folder", "primelean_profiles");
 
       const response = await fetch(CLOUDINARY_URL, {
         method: "POST",
@@ -125,20 +127,19 @@ export default function ProfileScreen() {
         setProfile({ ...profile, photoURL });
         Alert.alert("Sukses", "Foto profil berhasil diupdate!");
       } else {
-        console.error("Cloudinary Response Error:", json);
         Alert.alert(
           "Gagal",
           "Gagal mengunggah foto. Cek konfigurasi Cloudinary Anda."
         );
       }
     } catch (error: any) {
-      console.error("Upload Cloudinary Gagal:", error);
-      Alert.alert("Error", "Terjadi masalah koneksi atau server saat upload.");
+      Alert.alert("Error", "Terjadi masalah saat upload foto.");
     } finally {
       setUploading(false);
     }
   };
 
+  // 🔥 LOGOUT
   const handleLogout = async () => {
     Alert.alert("Logout", "Yakin mau keluar?", [
       { text: "Batal", style: "cancel" },
@@ -165,19 +166,12 @@ export default function ProfileScreen() {
     <View style={styles.container}>
       <StatusBar barStyle="light-content" backgroundColor="#0F172A" />
 
-      {/* Background Decorative Elements */}
-      <View style={styles.bgCircleTop} />
-
-      <ScrollView
-        showsVerticalScrollIndicator={false}
-        contentContainerStyle={styles.scrollContent}
-      >
-        {/* Header Section */}
+      <ScrollView showsVerticalScrollIndicator={false}>
+        {/* HEADER */}
         <View style={styles.headerContainer}>
           <TouchableOpacity
             onPress={pickAndUploadImage}
             disabled={uploading}
-            activeOpacity={0.8}
             style={styles.avatarWrapper}
           >
             <View style={styles.avatarBorder}>
@@ -193,9 +187,7 @@ export default function ProfileScreen() {
               ) : (
                 <View style={styles.avatarPlaceholder}>
                   <Text style={styles.avatarInitial}>
-                    {profile?.name?.[0]?.toUpperCase() ||
-                      user?.email?.[0]?.toUpperCase() ||
-                      "U"}
+                    {profile?.name?.[0]?.toUpperCase() || "U"}
                   </Text>
                 </View>
               )}
@@ -211,78 +203,58 @@ export default function ProfileScreen() {
           <Text style={styles.emailText}>{user.email}</Text>
         </View>
 
-        {/* Info Card */}
+        {/* CARD */}
         <View style={styles.cardContainer}>
           <Text style={styles.sectionTitle}>Personal Data</Text>
 
           {loading ? (
             <ActivityIndicator color="#3B82F6" style={{ margin: 20 }} />
           ) : (
-            <View style={styles.infoGroup}>
+            <>
               <InfoRow
                 label="Nama Lengkap"
                 value={profile?.name || "-"}
                 icon="person-outline"
               />
               <View style={styles.divider} />
-
               <InfoRow
                 label="Alamat"
                 value={profile?.address || "-"}
                 icon="location-outline"
               />
               <View style={styles.divider} />
-
               <InfoRow
                 label="Tipe Motor"
                 value={profile?.bikeType || "-"}
                 icon="bicycle-outline"
               />
               <View style={styles.divider} />
-
               <InfoRow
                 label="Gol. Darah"
                 value={profile?.bloodType || "-"}
                 icon="water-outline"
               />
               <View style={styles.divider} />
-
               <InfoRow
                 label="No. Darurat"
                 value={profile?.emergencyPhone || "-"}
                 icon="call-outline"
               />
-            </View>
+            </>
           )}
         </View>
 
-        {/* Action Buttons */}
+        {/* BUTTONS */}
         <View style={styles.actionContainer}>
-          <TouchableOpacity
-            style={styles.primaryButton}
+          {/* Primary Button */}
+          <PrimaryButton
+            text="Edit Profile"
+            icon="create-outline"
             onPress={() => router.push("/editprofile")}
-          >
-            <Ionicons
-              name="create-outline"
-              size={22}
-              color="#FFF"
-              style={{ marginRight: 8 }}
-            />
-            <Text style={styles.primaryButtonText}>Edit Profil</Text>
-          </TouchableOpacity>
+          />
 
-          <TouchableOpacity
-            style={styles.secondaryButton}
-            onPress={handleLogout}
-          >
-            <Ionicons
-              name="log-out-outline"
-              size={22}
-              color="#EF4444"
-              style={{ marginRight: 8 }}
-            />
-            <Text style={styles.secondaryButtonText}>Logout</Text>
-          </TouchableOpacity>
+          {/* Secondary Button untuk Logout */}
+          <SecondaryButton title="Logout" onPress={handleLogout} />
         </View>
 
         <Text style={styles.versionText}>v1.0.0 PrimeLean App</Text>
@@ -292,50 +264,19 @@ export default function ProfileScreen() {
 }
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: "#0F172A", // Slate 900
-  },
-  centerContent: {
-    justifyContent: "center",
-    alignItems: "center",
-  },
-  bgCircleTop: {
-    position: "absolute",
-    top: -100,
-    left: -50,
-    width: 300,
-    height: 300,
-    borderRadius: 150,
-    backgroundColor: "#1E293B", // Slate 800
-    opacity: 0.5,
-  },
-  scrollContent: {
-    paddingBottom: 40,
-  },
+  container: { flex: 1, backgroundColor: "#0F172A" },
+  centerContent: { justifyContent: "center", alignItems: "center" },
 
-  // Header Styles
-  headerContainer: {
-    alignItems: "center",
-    paddingTop: 60,
-    paddingBottom: 30,
-  },
-  avatarWrapper: {
-    marginBottom: 16,
-    position: "relative",
-  },
+  headerContainer: { alignItems: "center", paddingTop: 60, paddingBottom: 30 },
+
+  avatarWrapper: { position: "relative", marginBottom: 16 },
   avatarBorder: {
     padding: 4,
-    backgroundColor: "rgba(59, 130, 246, 0.2)", // Blue transparent ring
     borderRadius: 75,
     borderWidth: 1,
     borderColor: "#3B82F6",
   },
-  avatarImage: {
-    width: 130,
-    height: 130,
-    borderRadius: 65,
-  },
+  avatarImage: { width: 130, height: 130, borderRadius: 65 },
   avatarPlaceholder: {
     width: 130,
     height: 130,
@@ -352,11 +293,8 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     alignItems: "center",
   },
-  avatarInitial: {
-    fontSize: 50,
-    color: "#94A3B8",
-    fontWeight: "bold",
-  },
+  avatarInitial: { fontSize: 50, color: "#94A3B8", fontWeight: "bold" },
+
   cameraBadge: {
     position: "absolute",
     bottom: 4,
@@ -370,28 +308,20 @@ const styles = StyleSheet.create({
     borderWidth: 3,
     borderColor: "#0F172A",
   },
+
   welcomeText: {
     color: "#F8FAFC",
     fontSize: 24,
     fontWeight: "700",
     marginBottom: 4,
   },
-  emailText: {
-    color: "#64748B",
-    fontSize: 14,
-  },
+  emailText: { color: "#64748B", fontSize: 14 },
 
-  // Card Styles
   cardContainer: {
     marginHorizontal: 20,
-    backgroundColor: "#1E293B", // Slate 800
+    backgroundColor: "#1E293B",
     borderRadius: 24,
     padding: 24,
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 10 },
-    shadowOpacity: 0.3,
-    shadowRadius: 20,
-    elevation: 10,
     borderWidth: 1,
     borderColor: "#334155",
   },
@@ -401,23 +331,15 @@ const styles = StyleSheet.create({
     textTransform: "uppercase",
     fontWeight: "600",
     marginBottom: 20,
-    letterSpacing: 1,
-  },
-  infoGroup: {
-    gap: 0,
   },
   divider: {
     height: 1,
     backgroundColor: "#334155",
     marginVertical: 12,
-    marginLeft: 48, // offset for icon
+    marginLeft: 48,
   },
 
-  // Info Row Styles
-  infoRowContainer: {
-    flexDirection: "row",
-    alignItems: "center",
-  },
+  infoRowContainer: { flexDirection: "row", alignItems: "center" },
   iconCircle: {
     width: 36,
     height: 36,
@@ -427,63 +349,17 @@ const styles = StyleSheet.create({
     alignItems: "center",
     marginRight: 16,
   },
-  infoContent: {
-    flex: 1,
-  },
-  infoLabel: {
-    color: "#64748B", // Muted slate
-    fontSize: 12,
-    marginBottom: 2,
-  },
-  infoValue: {
-    color: "#F1F5F9", // Bright white
-    fontSize: 16,
-    fontWeight: "500",
-  },
+  infoContent: { flex: 1 },
+  infoLabel: { color: "#64748B", fontSize: 12, marginBottom: 2 },
+  infoValue: { color: "#F1F5F9", fontSize: 16, fontWeight: "500" },
 
-  // Button Styles
-  actionContainer: {
-    paddingHorizontal: 20,
-    marginTop: 30,
-    gap: 16,
-  },
-  primaryButton: {
-    backgroundColor: "#3B82F6",
-    flexDirection: "row",
-    justifyContent: "center",
-    alignItems: "center",
-    paddingVertical: 16,
-    borderRadius: 16,
-    shadowColor: "#3B82F6",
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.4,
-    shadowRadius: 10,
-    elevation: 8,
-  },
-  primaryButtonText: {
-    color: "#FFF",
-    fontSize: 16,
-    fontWeight: "bold",
-  },
-  secondaryButton: {
-    backgroundColor: "transparent",
-    flexDirection: "row",
-    justifyContent: "center",
-    alignItems: "center",
-    paddingVertical: 16,
-    borderRadius: 16,
-    borderWidth: 1,
-    borderColor: "#EF4444",
-  },
-  secondaryButtonText: {
-    color: "#EF4444",
-    fontSize: 16,
-    fontWeight: "600",
-  },
+  actionContainer: { paddingHorizontal: 20, marginTop: 30, gap: 16 },
+
   versionText: {
     textAlign: "center",
     color: "#334155",
     marginTop: 30,
     fontSize: 12,
+    marginBottom: 40,
   },
 });
