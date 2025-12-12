@@ -735,15 +735,6 @@ export default function Home() {
               >
                 Sudut Kemiringan (Roll)
               </Text>
-              <Text
-                style={{
-                  color: colors.ACCENT_DANGER,
-                  fontWeight: "bold",
-                  marginBottom: 10,
-                }}
-              >
-                Batas Aman: {DANGER_ROLL_THRESHOLD}°
-              </Text>
 
               <Svg height="200" width="300">
                 {/* Latar Belakang Arc (Indikator Roll Maks) */}
