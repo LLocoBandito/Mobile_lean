@@ -1,5 +1,6 @@
 import { useRouter } from "expo-router";
 import React, { useState } from "react";
+<<<<<<< HEAD
 import {
   Alert,
   Text,
@@ -11,6 +12,10 @@ import {
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import AuthButton from "../../components/buttonprimary";
+=======
+import { Alert, Text, TouchableOpacity, View } from "react-native";
+import AuthButton from "../../components/PrimaryButton";
+>>>>>>> 9527ca4677aeadf4909e8213e5184278a9bf0dad
 import AuthInput from "../../components/inputfield";
 import { handleRegister } from "../../utils/login_handler";
 
@@ -33,8 +38,16 @@ export default function RegisterScreen() {
     try {
       await handleRegister(email, password, name);
 
+<<<<<<< HEAD
       Alert.alert("Success", "Akun berhasil dibuat!");
       router.replace("../(tabs)");
+=======
+      Alert.alert(
+        "Success",
+        "Akun berhasil didaftarkan! Anda akan diarahkan ke login."
+      );
+      router.replace("../(auth)/login");
+>>>>>>> 9527ca4677aeadf4909e8213e5184278a9bf0dad
     } catch (error: any) {
       let errorMessage = "Pendaftaran gagal. Silakan coba lagi.";
 

@@ -1,18 +1,10 @@
+import { Ionicons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
 import React, { useState } from "react";
-import {
-  Alert,
-  StyleSheet,
-  Text,
-  TouchableOpacity,
-  View,
-  KeyboardAvoidingView,
-  Platform,
-} from "react-native";
-import AuthButton from "../../components/buttonprimary";
+import { Alert, StyleSheet, Text, TouchableOpacity, View } from "react-native";
+import AuthButton from "../../components/PrimaryButton";
 import AuthInput from "../../components/inputfield";
 import { handlePasswordReset } from "../../utils/login_handler";
-import { Ionicons } from "@expo/vector-icons";
 
 export default function ForgotPasswordScreen() {
   const router = useRouter();

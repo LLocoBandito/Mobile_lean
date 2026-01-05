@@ -35,17 +35,24 @@ const RealTabBarIcon: FC<TabBarIconProps> = ({ name, color }) => (
 );
 
 const TabLayout: FC = () => {
-  const colorScheme = useColorScheme();
-  const activeColor = Colors[colorScheme ?? "light"].tint;
+  // const colorScheme = useColorScheme();
+  // const activeColor = Colors[colorScheme ?? "light"].tint;
+
+  // Tetapkan warna untuk tab bar yang hitam
+  const BLACK_COLOR = "#000";
+  const ACTIVE_COLOR_ON_BLACK = "#ffffff"; // Putih untuk ikon/teks aktif
+  const INACTIVE_COLOR_ON_BLACK = "#aaaaaa"; // Abu-abu terang untuk ikon/teks non-aktif
 
   return (
     <Tabs
       screenOptions={{
-        tabBarActiveTintColor: activeColor,
+        tabBarActiveTintColor: ACTIVE_COLOR_ON_BLACK, // Gunakan warna terang
+        tabBarInactiveTintColor: INACTIVE_COLOR_ON_BLACK, // Gunakan warna terang
         headerShown: false,
         tabBarButton: HapticTab as any,
         tabBarStyle: {
-          backgroundColor: Colors[colorScheme ?? "light"].background,
+          // DIUBAH: Setel latar belakang menjadi hitam secara langsung
+          backgroundColor: BLACK_COLOR,
           borderTopWidth: 0,
           elevation: 0,
           shadowOpacity: 0,

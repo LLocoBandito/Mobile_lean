@@ -5,7 +5,9 @@ import {
   deleteDoc,
   doc,
   getDocs,
+  query,
   updateDoc,
+  where,
 } from "firebase/firestore";
 import React, { useCallback, useEffect, useState } from "react";
 import {
@@ -20,16 +22,15 @@ import {
   TouchableOpacity,
   View,
 } from "react-native";
-import { db } from "../../utils/firebaseConfig";
+import { auth, db } from "../../utils/firebaseConfig"; // Pastikan auth dan db di-import
 
+// --- INTERFACE SESI ---
 interface MonitoringSession {
   id: string;
   sessionName: string;
   startPoint: { timestamp: string };
-  totalLocationPoints: number;
-  path?: any[];
-  avgRoll?: number;
-  avgPitch?: number;
+  totalPoints: number;
+  createdAt: string;
 }
 
 export default function Manage() {
@@ -37,49 +38,83 @@ export default function Manage() {
   const [modalVisible, setModalVisible] = useState(false);
   const [inputName, setInputName] = useState("");
   const [dataList, setDataList] = useState<MonitoringSession[]>([]);
-  const [loading, setLoading] = useState(true);
   const [selectedSession, setSelectedSession] =
     useState<MonitoringSession | null>(null);
 
-  const fetchData = useCallback(async () => {
+  // 🔥 STATE BARU UNTUK LOADING DAN REFRESH
+  const [initialLoading, setInitialLoading] = useState(true);
+  const [isRefreshing, setIsRefreshing] = useState(false);
+
+  // === FUNGSI FETCH DATA DENGAN FILTER USER ID ===
+  const fetchData = useCallback(async (isInitialLoad: boolean = false) => {
+    const user = auth.currentUser;
+
+    if (!user) {
+      setDataList([]);
+      setInitialLoading(false);
+      setIsRefreshing(false);
+      return;
+    }
+
     try {
-      setLoading(true);
-      const querySnapshot = await getDocs(
-        collection(db, "monitoring_sessions")
-      );
+      // Atur state loading yang benar
+      if (isInitialLoad) {
+        setInitialLoading(true);
+      } else {
+        setIsRefreshing(true);
+      }
+
+      // Query: Ambil hanya sesi yang dimiliki oleh pengguna yang sedang login
+      const sessionsRef = collection(db, "monitoring_sessions");
+      const q = query(sessionsRef, where("userId", "==", user.uid));
+
+      const querySnapshot = await getDocs(q);
       const firebaseData: MonitoringSession[] = [];
 
       querySnapshot.forEach((document) => {
         const data = document.data();
+
         firebaseData.push({
           id: document.id,
           sessionName: data.sessionName || "Sesi Tanpa Nama",
           startPoint: data.startPoint,
-          totalLocationPoints: data.totalPoints || 0,
-          path: data.path || [],
-          avgRoll: data.avgRoll || 0,
-          avgPitch: data.avgPitch || 0,
+          totalPoints: data.totalPoints || 0,
+          createdAt:
+            data.createdAt ||
+            new Date(data.startPoint?.timestamp || 0).toISOString(),
         });
       });
 
+      // Sorting berdasarkan waktu terbaru (createdAt)
       firebaseData.sort(
         (a, b) =>
-          new Date(b.startPoint?.timestamp || 0).getTime() -
-          new Date(a.startPoint?.timestamp || 0).getTime()
+          new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
       );
+
       setDataList(firebaseData);
     } catch (error) {
-      console.error("Error:", error);
-      Alert.alert("Error", "Gagal memuat data dari database.");
+      console.error("Error fetching data:", error);
+      Alert.alert(
+        "Error",
+        "Gagal memuat data dari database. Periksa koneksi atau Firestore Rules."
+      );
     } finally {
-      setLoading(false);
+      // Matikan semua indikator loading
+      setInitialLoading(false);
+      setIsRefreshing(false);
     }
   }, []);
 
   useEffect(() => {
-    fetchData();
+    fetchData(true); // Panggil dengan flag untuk pemuatan awal (initialLoad)
   }, [fetchData]);
 
+  // 🔥 HANDLER REFRESH
+  const handleRefresh = () => {
+    fetchData(false); // Panggil fetchData tanpa isInitialLoad=true
+  };
+
+  // --- HANDLER HAPUS DATA ---
   const handleDelete = (id: string) => {
     Alert.alert("Hapus Sesi", "Yakin ingin menghapus sesi ini?", [
       { text: "Batal", style: "cancel" },
@@ -99,6 +134,7 @@ export default function Manage() {
     ]);
   };
 
+  // --- HANDLER EDIT DATA ---
   const openEditModal = (item: MonitoringSession) => {
     setSelectedSession(item);
     setInputName(item.sessionName);
@@ -133,6 +169,7 @@ export default function Manage() {
     }
   };
 
+  // --- RENDER ITEM FLATLIST ---
   const renderItem = ({ item }: { item: MonitoringSession }) => (
     <View style={styles.card}>
       <View style={styles.cardContent}>
@@ -140,10 +177,10 @@ export default function Manage() {
           {item.sessionName}
         </Text>
         <Text style={styles.sessionInfo}>
-          Titik GPS: {item.totalLocationPoints.toLocaleString()}
+          Titik GPS: {item.totalPoints.toLocaleString()}
         </Text>
         <Text style={styles.sessionDate}>
-          {new Date(item.startPoint?.timestamp || 0).toLocaleString("id-ID", {
+          {new Date(item.createdAt).toLocaleString("id-ID", {
             dateStyle: "medium",
             timeStyle: "short",
           })}
@@ -165,6 +202,7 @@ export default function Manage() {
         </TouchableOpacity>
         <TouchableOpacity
           style={styles.actionBtn}
+          // Navigasi ke halaman detail
           onPress={() => router.push(`/detail/${item.id}`)}
         >
           <Feather name="eye" size={24} color="#60A5FA" />
@@ -181,11 +219,12 @@ export default function Manage() {
         <View style={styles.overlay} pointerEvents="none" />
 
         <View style={styles.header}>
-          <Text style={styles.title}>Data Sesi Monitoring</Text>
+          <Text style={styles.title}>Data Sesi Monitoring 📊</Text>
           <Text style={styles.subtitle}>Kelola semua sesi monitoring kamu</Text>
         </View>
 
-        {loading ? (
+        {/* 🔥 Gunakan initialLoading untuk Pemuatan Awal */}
+        {initialLoading ? (
           <View style={styles.loadingContainer}>
             <ActivityIndicator size="large" color="#60A5FA" />
             <Text style={styles.loadingText}>Memuat data sesi...</Text>
@@ -194,9 +233,15 @@ export default function Manage() {
           <View style={styles.emptyContainer}>
             <Feather name="database" size={80} color="#475569" />
             <Text style={styles.emptyText}>Belum ada sesi monitoring</Text>
-            <Text style={styles.emptySubtext}>
-              Mulai monitoring untuk melihat data di sini
-            </Text>
+            {auth.currentUser ? (
+              <Text style={styles.emptySubtext}>
+                Mulai monitoring di tab **Home** untuk melihat data di sini
+              </Text>
+            ) : (
+              <Text style={styles.emptySubtext}>
+                Anda perlu **login** untuk melihat dan menyimpan data sesi.
+              </Text>
+            )}
           </View>
         ) : (
           <FlatList
@@ -205,6 +250,9 @@ export default function Manage() {
             renderItem={renderItem}
             contentContainerStyle={{ paddingBottom: 100 }}
             showsVerticalScrollIndicator={false}
+            // 🔥 Properti Pull-to-Refresh
+            refreshing={isRefreshing}
+            onRefresh={handleRefresh}
           />
         )}
 
