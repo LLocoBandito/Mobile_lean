@@ -1,4 +1,5 @@
 import { Ionicons } from "@expo/vector-icons";
+import { Audio } from "expo-av";
 import * as Haptics from "expo-haptics";
 import * as Location from "expo-location";
 import * as ScreenOrientation from "expo-screen-orientation";
@@ -19,10 +20,9 @@ import {
 import MapView, { Marker, Polyline } from "react-native-maps";
 import { SafeAreaView } from "react-native-safe-area-context";
 import Svg, { Path } from "react-native-svg";
-import { Audio } from "expo-av";
 
-import { auth, db } from "../../utils/firebaseConfig";
 import MonitoringCard from "../../components/MonitoringCard";
+import { auth, db } from "../../utils/firebaseConfig";
 
 const { width: SCREEN_WIDTH } = Dimensions.get("window");
 
@@ -112,11 +112,11 @@ export default function Home() {
   // === PENGATURAN WARNA ===
   const isDark = colorScheme === "dark";
   const colors = {
-    BG_PRIMARY: isDark ? "#0F172A" : "#000000",
-    BG_CARD: isDark ? "rgba(30, 41, 59, 0.95)" : "#111111",
-    TEXT_PRIMARY: isDark ? "#E2E8F0" : "#FFFFFF",
-    TEXT_SECONDARY: isDark ? "#94A3B8" : "#AAAAAA",
-    BORDER: isDark ? "#475569" : "#333333",
+    BG_PRIMARY: isDark ? "#0F172A" : "#FFFFFF", // Background utama: putih murni di light mode
+    BG_CARD: isDark ? "rgba(30, 41, 59, 0.95)" : "#FFFFFF", // Card: putih murni di light mode
+    TEXT_PRIMARY: isDark ? "#E2E8F0" : "#000000", // Teks utama: hitam di light mode
+    TEXT_SECONDARY: isDark ? "#94A3B8" : "#444444", // Teks sekunder: abu-abu gelap
+    BORDER: isDark ? "#475569" : "#E0E0E0", // Border sangat terang di light
     ACCENT_SAFE: "#10B981",
     ACCENT_WARNING: "#F59E0B",
     ACCENT_DANGER: "#EF4444",
