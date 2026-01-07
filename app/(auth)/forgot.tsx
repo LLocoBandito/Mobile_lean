@@ -1,7 +1,7 @@
 import { useRouter } from "expo-router";
 import React, { useState } from "react";
 import { Alert, StyleSheet, Text, TouchableOpacity, View } from "react-native";
-import AuthButton from "../../components/PrimaryButton";
+import PrimaryButton from "../../components/PrimaryButton";
 import AuthInput from "../../components/inputfield";
 import { handlePasswordReset } from "../../utils/login_handler";
 
@@ -61,9 +61,10 @@ export default function ForgotPasswordScreen() {
         onChangeText={setEmail}
       />
 
-      <AuthButton
-        title={loading ? "Loading..." : "Send Reset Code"}
-        onPress={loading ? () => {} : handleReset}
+      <PrimaryButton
+        text={loading ? "Loading..." : "Send Reset Code"}
+        onPress={handleReset}
+        loading={loading}
       />
 
       <TouchableOpacity onPress={() => router.push("/(auth)/login")}>
@@ -95,7 +96,7 @@ const styles = StyleSheet.create({
     lineHeight: 22,
   },
   backText: {
-    color: "#3B82F6",
+    color: "#ffffffff",
     textAlign: "center",
     marginTop: 20,
     fontSize: 15,

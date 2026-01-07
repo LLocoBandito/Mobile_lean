@@ -1,63 +1,64 @@
 import {
   createUserWithEmailAndPassword,
+  sendEmailVerification,
   sendPasswordResetEmail,
   signInWithEmailAndPassword,
-  updateProfile, // Diperlukan untuk setting displayName
+  updateProfile,
 } from "firebase/auth";
-import { doc, setDoc } from "firebase/firestore"; // Diperlukan untuk menyimpan ke Firestore
-import { auth, db } from "./firebaseConfig"; // Pastikan 'db' diimpor dari file config Anda
+
+import { doc, getDoc, setDoc } from "firebase/firestore";
+import { auth, db } from "./firebaseConfig";
 
 /**
- * Fungsi untuk mendaftarkan user baru dengan Email, Password, dan Nama.
- * Dokumen profil awal akan dibuat di Firestore.
- * @param email Email user
- * @param password Password user
- * @param name Nama lengkap user (tambahan)
+ * REGISTER
  */
 export const handleRegister = async (
   email: string,
   password: string,
-  name: string // <<< PARAMETER BARU DITAMBAHKAN
+  name: string
 ) => {
   try {
-    // 1. Buat User di Firebase Authentication
+    // 1. Create account
     const userCredential = await createUserWithEmailAndPassword(
       auth,
       email,
       password
     );
+
     const user = userCredential.user;
 
-    // 2. Update Display Name (Opsional, tapi bagus)
-    await updateProfile(user, { displayName: name });
+    // 2. Set display name
+    await updateProfile(user, {
+      displayName: name,
+    });
 
-    // 3. Buat Dokumen Profil Awal di Firestore
-    const userDocRef = doc(db, "users", user.uid);
+    // 3. Send email verification
+    await sendEmailVerification(user);
 
+    // 4. Save user profile to Firestore
     await setDoc(
-      userDocRef,
+      doc(db, "users", user.uid),
       {
         uid: user.uid,
         email: user.email,
-        name: name, // Simpan nama yang diinput
+        name,
+        emailVerified: false,
         createdAt: new Date().toISOString(),
-        photoURL: null, // Setel awal photoURL menjadi null
+        photoURL: null,
       },
-      { merge: true } // Gunakan merge: true
+      { merge: true }
     );
 
-    console.log("Pendaftaran Berhasil & Dokumen Profil Dibuat:", user.uid);
+    console.log("REGISTER SUCCESS + EMAIL VERIFICATION SENT");
     return user;
   } catch (error) {
-    console.error("Firebase Registration Error:", error);
+    console.error("REGISTER ERROR:", error);
     throw error;
   }
 };
 
 /**
- * Fungsi untuk melakukan Login user dengan Email dan Password.
- * @param email Email user
- * @param password Password user
+ * LOGIN (BLOCK IF EMAIL NOT VERIFIED)
  */
 export const handleLogin = async (email: string, password: string) => {
   try {
@@ -66,24 +67,38 @@ export const handleLogin = async (email: string, password: string) => {
       email,
       password
     );
-    console.log("Login Berhasil:", userCredential.user.uid);
-    return userCredential.user;
+
+    const user = userCredential.user;
+
+    if (!user.emailVerified) {
+      throw new Error("Email belum diverifikasi. Silakan cek email Anda.");
+    }
+
+    // Optional: sync emailVerified to Firestore
+    const userRef = doc(db, "users", user.uid);
+    const snap = await getDoc(userRef);
+
+    if (snap.exists()) {
+      await setDoc(userRef, { emailVerified: true }, { merge: true });
+    }
+
+    console.log("LOGIN SUCCESS:", user.uid);
+    return user;
   } catch (error) {
-    console.error("Firebase Login Error:", error);
+    console.error("LOGIN ERROR:", error);
     throw error;
   }
 };
 
 /**
- * Fungsi untuk mengirim email reset password.
- * @param email Email user yang ingin direset passwordnya
+ * RESET PASSWORD
  */
 export const handlePasswordReset = async (email: string) => {
   try {
     await sendPasswordResetEmail(auth, email);
-    console.log("Email reset password berhasil dikirim ke:", email);
+    console.log("RESET PASSWORD EMAIL SENT:", email);
   } catch (error) {
-    console.error("Firebase Password Reset Error:", error);
+    console.error("RESET PASSWORD ERROR:", error);
     throw error;
   }
 };

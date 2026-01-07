@@ -1,9 +1,9 @@
 import { useRouter } from "expo-router";
 import React, { useState } from "react";
 import { Alert, Text, TouchableOpacity, View } from "react-native";
-import AuthButton from "../../components/PrimaryButton";
+import PrimaryButton from "../../components/PrimaryButton";
 import AuthInput from "../../components/inputfield";
-import { handleRegister } from "./../../utils/login_handler";
+import { handleRegister } from "../../utils/login_handler";
 
 export default function RegisterScreen() {
   const router = useRouter();
@@ -14,8 +14,7 @@ export default function RegisterScreen() {
   const [loading, setLoading] = useState(false);
 
   const registrationHandler = async () => {
-    // Validasi dasar - Pastikan nama juga ada
-    if (!email || !password || !name) {
+    if (!name || !email || !password) {
       Alert.alert("Error", "Semua kolom harus diisi.");
       return;
     }
@@ -23,27 +22,26 @@ export default function RegisterScreen() {
     setLoading(true);
 
     try {
-      // PERUBAHAN KRITIS: Kirimkan 'name' ke fungsi handler
       await handleRegister(email, password, name);
 
       Alert.alert(
-        "Success",
-        "Akun berhasil didaftarkan! Anda akan diarahkan ke login."
+        "Berhasil 🎉",
+        "Akun berhasil dibuat. Silakan cek email untuk verifikasi sebelum login."
       );
-      router.replace("../(auth)/login");
+
+      router.replace("/(auth)/login");
     } catch (error: any) {
-      let errorMessage = "Pendaftaran gagal. Silakan coba lagi.";
+      let message = "Pendaftaran gagal.";
 
       if (error.code === "auth/email-already-in-use") {
-        errorMessage =
-          "Email ini sudah terdaftar. Silakan login atau gunakan email lain.";
+        message = "Email sudah terdaftar.";
       } else if (error.code === "auth/weak-password") {
-        errorMessage = "Password terlalu lemah. Minimum 6 karakter.";
+        message = "Password minimal 6 karakter.";
       } else if (error.message) {
-        errorMessage = error.message;
+        message = error.message;
       }
 
-      Alert.alert("Pendaftaran Gagal", errorMessage);
+      Alert.alert("Gagal", message);
     } finally {
       setLoading(false);
     }
@@ -55,7 +53,7 @@ export default function RegisterScreen() {
         flex: 1,
         justifyContent: "center",
         padding: 24,
-        backgroundColor: "#0F172A", // Dark background
+        backgroundColor: "#0F172A",
       }}
     >
       <Text
@@ -76,6 +74,7 @@ export default function RegisterScreen() {
         value={name}
         onChangeText={setName}
       />
+
       <AuthInput
         label="Email"
         placeholder="Your email"
@@ -83,6 +82,7 @@ export default function RegisterScreen() {
         value={email}
         onChangeText={setEmail}
       />
+
       <AuthInput
         label="Password"
         placeholder="Create password"
@@ -91,10 +91,10 @@ export default function RegisterScreen() {
         onChangeText={setPassword}
       />
 
-      <AuthButton
-        title={loading ? "Mendaftar..." : "Sign Up"}
-        // Menggunakan kondisional untuk mencegah panggilan onPress saat loading
-        onPress={loading ? () => {} : registrationHandler}
+      <PrimaryButton
+        text={loading ? "Mendaftar..." : "Sign Up"}
+        onPress={registrationHandler}
+        loading={loading}
       />
 
       <TouchableOpacity onPress={() => router.push("/(auth)/login")}>

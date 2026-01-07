@@ -12,7 +12,6 @@ import {
 } from "firebase/auth";
 import React, { FC, useEffect, useState } from "react";
 import {
-  ActivityIndicator,
   Alert,
   StyleSheet,
   Text,
@@ -20,6 +19,7 @@ import {
   TouchableOpacity,
   View,
 } from "react-native";
+import PrimaryButton from "../../components/PrimaryButton";
 import { auth } from "../../utils/firebaseConfig";
 
 const LoginScreen: FC = () => {
@@ -31,7 +31,6 @@ const LoginScreen: FC = () => {
   // 1. Konfigurasi Google Sign-In saat komponen dimuat
   useEffect(() => {
     GoogleSignin.configure({
-      // GANTI DENGAN WEB CLIENT ID DARI FIREBASE CONSOLE
       webClientId:
         "209930100873-fm9d2dbr45ee8d2frsjj7cra6k3hftji.apps.googleusercontent.com",
       offlineAccess: true,
@@ -44,9 +43,6 @@ const LoginScreen: FC = () => {
     try {
       await new Promise((resolve) => setTimeout(resolve, 500));
       await GoogleSignin.hasPlayServices();
-
-      // PERBAIKAN: Gunakan destructuring { data }
-      // Karena idToken sekarang ada di dalam data.idToken
       const response = await GoogleSignin.signIn();
       const idToken = response.data?.idToken;
 
@@ -147,17 +143,7 @@ const LoginScreen: FC = () => {
         style={styles.input}
       />
 
-      <TouchableOpacity
-        onPress={handleLogin}
-        style={[styles.button, loading && styles.buttonDisabled]}
-        disabled={loading}
-      >
-        {loading ? (
-          <ActivityIndicator color="#fff" />
-        ) : (
-          <Text style={styles.buttonText}>LOGIN</Text>
-        )}
-      </TouchableOpacity>
+      <PrimaryButton text="LOGIN" onPress={handleLogin} loading={loading} />
 
       {/* GARIS PEMISAH */}
       <View style={styles.dividerContainer}>
