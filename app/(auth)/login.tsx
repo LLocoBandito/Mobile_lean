@@ -1,9 +1,16 @@
+import { Ionicons } from "@expo/vector-icons"; // Tambahkan icon
+import {
+  GoogleSignin,
+  statusCodes,
+} from "@react-native-google-signin/google-signin";
 import { Href, useRouter } from "expo-router";
 import {
+  GoogleAuthProvider,
   sendEmailVerification,
+  signInWithCredential,
   signInWithEmailAndPassword,
 } from "firebase/auth";
-import React, { FC, useState } from "react";
+import React, { FC, useEffect, useState } from "react";
 import {
   ActivityIndicator,
   Alert,
@@ -20,6 +27,51 @@ const LoginScreen: FC = () => {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
+
+  // 1. Konfigurasi Google Sign-In saat komponen dimuat
+  useEffect(() => {
+    GoogleSignin.configure({
+      // GANTI DENGAN WEB CLIENT ID DARI FIREBASE CONSOLE
+      webClientId:
+        "209930100873-fm9d2dbr45ee8d2frsjj7cra6k3hftji.apps.googleusercontent.com",
+      offlineAccess: true,
+    });
+  }, []);
+
+  // 2. Fungsi Login dengan Google
+  const handleGoogleLogin = async () => {
+    setLoading(true);
+    try {
+      await new Promise((resolve) => setTimeout(resolve, 500));
+      await GoogleSignin.hasPlayServices();
+
+      // PERBAIKAN: Gunakan destructuring { data }
+      // Karena idToken sekarang ada di dalam data.idToken
+      const response = await GoogleSignin.signIn();
+      const idToken = response.data?.idToken;
+
+      if (!idToken) {
+        throw new Error("No ID Token found");
+      }
+
+      const credential = GoogleAuthProvider.credential(idToken);
+      const userCredential = await signInWithCredential(auth, credential);
+
+      console.log("Login Google Sukses:", userCredential.user.email);
+      router.replace("/(tabs)");
+    } catch (error: any) {
+      if (error.code === statusCodes.SIGN_IN_CANCELLED) {
+        Alert.alert("Dibatalkan", "Proses login Google dibatalkan.");
+      } else if (error.code === statusCodes.IN_PROGRESS) {
+        console.log("Login sedang diproses...");
+      } else {
+        console.error("Error Google Login:", error);
+        Alert.alert("Error", "Gagal login dengan Google.");
+      }
+    } finally {
+      setLoading(false);
+    }
+  };
 
   const handleLogin = async () => {
     if (!email || !password) {
@@ -38,11 +90,8 @@ const LoginScreen: FC = () => {
 
       const user = userCredential.user;
 
-      // CEK APAKAH EMAIL SUDAH DIVERIFIKASI
       if (!user.emailVerified) {
-        // Kirim ulang email verifikasi
         await sendEmailVerification(user);
-
         Alert.alert(
           "Email Belum Diverifikasi",
           "Kami telah mengirim ulang link verifikasi ke email kamu.\n\nSilakan cek inbox/spam, klik link verifikasi, lalu login kembali.",
@@ -51,14 +100,10 @@ const LoginScreen: FC = () => {
         return;
       }
 
-      // Email sudah terverifikasi → masuk ke aplikasi!
       console.log("Login sukses:", user.email);
-      router.replace("/(tabs)"); // atau "/home" tergantung struktur kamu
+      router.replace("/(tabs)");
     } catch (error: any) {
-      console.log(error.code);
-
       let pesan = "Terjadi kesalahan saat login.";
-
       switch (error.code) {
         case "auth/user-not-found":
         case "auth/wrong-password":
@@ -70,11 +115,7 @@ const LoginScreen: FC = () => {
         case "auth/too-many-requests":
           pesan = "Terlalu banyak percobaan. Coba lagi nanti.";
           break;
-        case "auth/network-request-failed":
-          pesan = "Koneksi internet bermasalah.";
-          break;
       }
-
       Alert.alert("Login Gagal", pesan);
     } finally {
       setLoading(false);
@@ -118,6 +159,28 @@ const LoginScreen: FC = () => {
         )}
       </TouchableOpacity>
 
+      {/* GARIS PEMISAH */}
+      <View style={styles.dividerContainer}>
+        <View style={styles.divider} />
+        <Text style={styles.dividerText}>Atau</Text>
+        <View style={styles.divider} />
+      </View>
+
+      {/* TOMBOL GOOGLE LOGIN */}
+      <TouchableOpacity
+        onPress={handleGoogleLogin}
+        style={styles.googleButton}
+        disabled={loading}
+      >
+        <Ionicons
+          name="logo-google"
+          size={20}
+          color="#fff"
+          style={{ marginRight: 10 }}
+        />
+        <Text style={styles.googleButtonText}>Masuk dengan Google</Text>
+      </TouchableOpacity>
+
       <TouchableOpacity onPress={() => router.push("/(auth)/forgot" as Href)}>
         <Text style={styles.linkText}>Lupa Password?</Text>
       </TouchableOpacity>
@@ -127,8 +190,7 @@ const LoginScreen: FC = () => {
       </TouchableOpacity>
 
       <Text style={styles.footer}>
-        Hanya akun dengan email terverifikasi yang dapat menggunakan aplikasi
-        ini.
+        Aplikasi ini memantau performa berkendara Anda secara real-time.
       </Text>
     </View>
   );
@@ -169,7 +231,7 @@ const styles = StyleSheet.create({
     paddingVertical: 16,
     borderRadius: 14,
     alignItems: "center",
-    marginVertical: 20,
+    marginTop: 10,
   },
   buttonDisabled: {
     opacity: 0.7,
@@ -178,6 +240,36 @@ const styles = StyleSheet.create({
     color: "#fff",
     fontWeight: "bold",
     fontSize: 18,
+  },
+  // Style Tambahan untuk Google & Divider
+  dividerContainer: {
+    flexDirection: "row",
+    alignItems: "center",
+    marginVertical: 20,
+  },
+  divider: {
+    flex: 1,
+    height: 1,
+    backgroundColor: "#334155",
+  },
+  dividerText: {
+    color: "#94A3B8",
+    paddingHorizontal: 10,
+    fontSize: 14,
+  },
+  googleButton: {
+    flexDirection: "row",
+    backgroundColor: "#4285F4", // Warna Biru Google
+    paddingVertical: 16,
+    borderRadius: 14,
+    alignItems: "center",
+    justifyContent: "center",
+    marginBottom: 20,
+  },
+  googleButtonText: {
+    color: "#fff",
+    fontWeight: "bold",
+    fontSize: 16,
   },
   linkText: {
     color: "#60A5FA",

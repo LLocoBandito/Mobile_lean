@@ -1,4 +1,5 @@
 import { Ionicons } from "@expo/vector-icons";
+import { Audio } from "expo-av";
 import * as Haptics from "expo-haptics";
 import * as Location from "expo-location";
 import * as ScreenOrientation from "expo-screen-orientation";
@@ -16,16 +17,55 @@ import {
   TouchableOpacity,
   View,
 } from "react-native";
-import MapView, { Marker, Polyline } from "react-native-maps";
 import { SafeAreaView } from "react-native-safe-area-context";
 import Svg, { Path } from "react-native-svg";
-import { Audio } from "expo-av";
+import { WebView } from "react-native-webview";
 
-import { auth, db } from "../../utils/firebaseConfig";
 import MonitoringCard from "../../components/MonitoringCard";
+import { auth, db } from "../../utils/firebaseConfig";
 
 const { width: SCREEN_WIDTH } = Dimensions.get("window");
+const getLeafletHtml = (points: LocationPoint[]) => {
+  const lastPoint =
+    points.length > 0
+      ? points[points.length - 1]
+      : { latitude: -8.65, longitude: 115.21 };
+  const pathData = JSON.stringify(points.map((p) => [p.latitude, p.longitude]));
 
+  return `
+    <!DOCTYPE html>
+    <html>
+      <head>
+        <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+        <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+        <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+        <style>
+          #map { height: 100vh; width: 100vw; margin: 0; padding: 0; background: #0F172A; }
+          .leaflet-control-attribution { display: none; }
+        </style>
+      </head>
+      <body>
+        <div id="map"></div>
+        <script>
+          var map = L.map('map', { zoomControl: false }).setView([${lastPoint.latitude}, ${lastPoint.longitude}], 15);
+          
+          L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+            maxZoom: 19,
+          }).addTo(map);
+
+          var path = L.polyline(${pathData}, {color: '#3B82F6', weight: 5}).addTo(map);
+          
+          if (${points.length} > 0) {
+            var marker = L.circleMarker([${lastPoint.latitude}, ${lastPoint.longitude}], {
+              radius: 8, fillOpacity: 1, color: 'white', fillColor: '#EF4444', weight: 2
+            }).addTo(map);
+            map.panTo([${lastPoint.latitude}, ${lastPoint.longitude}]);
+          }
+        </script>
+      </body>
+    </html>
+  `;
+};
 // --- KONSTANTA ---
 const MAX_ROLL_ANGLE = 50;
 const DANGER_SPEED_THRESHOLD = 120; // km/h
@@ -112,11 +152,11 @@ export default function Home() {
   // === PENGATURAN WARNA ===
   const isDark = colorScheme === "dark";
   const colors = {
-    BG_PRIMARY: isDark ? "#0F172A" : "#000000",
-    BG_CARD: isDark ? "rgba(30, 41, 59, 0.95)" : "#111111",
-    TEXT_PRIMARY: isDark ? "#E2E8F0" : "#FFFFFF",
-    TEXT_SECONDARY: isDark ? "#94A3B8" : "#AAAAAA",
-    BORDER: isDark ? "#475569" : "#333333",
+    BG_PRIMARY: isDark ? "#0F172A" : "#FFFFFF", // Background utama: putih murni di light mode
+    BG_CARD: isDark ? "rgba(30, 41, 59, 0.95)" : "#FFFFFF", // Card: putih murni di light mode
+    TEXT_PRIMARY: isDark ? "#E2E8F0" : "#000000", // Teks utama: hitam di light mode
+    TEXT_SECONDARY: isDark ? "#94A3B8" : "#444444", // Teks sekunder: abu-abu gelap
+    BORDER: isDark ? "#475569" : "#E0E0E0", // Border sangat terang di light
     ACCENT_SAFE: "#10B981",
     ACCENT_WARNING: "#F59E0B",
     ACCENT_DANGER: "#EF4444",
@@ -141,22 +181,39 @@ export default function Home() {
 
   // Menghentikan dan reset audio
   const stopBeepSound = async () => {
-    if (beepSoundRef.current) {
-      await beepSoundRef.current.stopAsync();
-      await beepSoundRef.current.setPositionAsync(0);
+    if (!beepSoundRef.current) return;
+
+    try {
+      const status = await beepSoundRef.current.getStatusAsync();
+      if (status && "isLoaded" in status && status.isLoaded) {
+        await beepSoundRef.current.stopAsync();
+        await beepSoundRef.current.setPositionAsync(0);
+      }
+    } catch (error) {
+      console.warn("Gagal menghentikan suara:", error);
     }
   };
 
   // Memainkan audio
   const playBeepSound = async () => {
-    if (beepSoundRef.current) {
+    // 1. Pastikan ref tidak null
+    if (!beepSoundRef.current) return;
+
+    try {
       const status = await beepSoundRef.current.getStatusAsync();
-      if (status.isLoaded && !status.isPlaying) {
-        await beepSoundRef.current.playAsync();
+
+      // 2. Cek apakah properti 'isLoaded' ada dan bernilai true
+      if (status && "isLoaded" in status && status.isLoaded) {
+        // 3. Hanya mainkan jika tidak sedang bunyi
+        if (!status.isPlaying) {
+          await beepSoundRef.current.playAsync();
+        }
       }
+    } catch (error) {
+      // Menangkap error jika status dipanggil saat sound sedang unload
+      console.warn("Gagal memainkan suara (belum dimuat):", error);
     }
   };
-
   // Membongkar audio saat unmount
   const unloadBeepSound = async () => {
     if (beepSoundRef.current) {
@@ -799,6 +856,8 @@ export default function Home() {
             </View>
 
             {/* Map */}
+            {/* Map */}
+            {/* Map (Leaflet via WebView) */}
             <View
               style={[
                 styles.mapCard,
@@ -812,44 +871,23 @@ export default function Home() {
                   fontSize: 20,
                 }}
               >
-                Peta Perjalanan
+                Peta Perjalanan (Leaflet)
               </Text>
-              <MapView
-                style={styles.map}
-                region={
-                  locationPoints.length > 0
-                    ? {
-                        latitude:
-                          locationPoints[locationPoints.length - 1].latitude,
-                        longitude:
-                          locationPoints[locationPoints.length - 1].longitude,
-                        latitudeDelta: 0.01,
-                        longitudeDelta: 0.01,
-                      }
-                    : undefined
-                }
-                showsUserLocation
+
+              <View
+                style={[styles.map, { overflow: "hidden", borderRadius: 12 }]}
               >
-                {locationPoints.length > 0 && (
-                  <>
-                    <Polyline
-                      coordinates={locationPoints}
-                      strokeWidth={6}
-                      strokeColor={colors.ACCENT_INFO}
-                    />
-                    <Marker
-                      coordinate={locationPoints[0]}
-                      title="Start"
-                      pinColor="#10B981"
-                    />
-                    <Marker
-                      coordinate={locationPoints[locationPoints.length - 1]}
-                      title="Sekarang"
-                      pinColor="#EF4444"
-                    />
-                  </>
-                )}
-              </MapView>
+                <WebView
+                  key={locationPoints.length} // Force re-render saat koordinat bertambah
+                  originWhitelist={["*"]}
+                  source={{ html: getLeafletHtml(locationPoints) }}
+                  style={{ flex: 1, backgroundColor: colors.BG_PRIMARY }}
+                  javaScriptEnabled={true}
+                  domStorageEnabled={true}
+                  scrollEnabled={false} // Agar tidak mengganggu scroll utama aplikasi
+                />
+              </View>
+
               <Text
                 style={{
                   color: colors.TEXT_SECONDARY,
