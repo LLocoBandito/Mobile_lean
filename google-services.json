@@ -1,0 +1,48 @@
+{
+  "project_info": {
+    "project_number": "209930100873",
+    "firebase_url": "https://leanmonitorapp-1f503-default-rtdb.firebaseio.com",
+    "project_id": "leanmonitorapp-1f503",
+    "storage_bucket": "leanmonitorapp-1f503.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:209930100873:android:06d85a29d38c287c712658",
+        "android_client_info": {
+          "package_name": "com.riyasa.lean_monitoring"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "209930100873-r5hgj2gh6cumu23vnvdbkljb93di3vtd.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.riyasa.lean_monitoring",
+            "certificate_hash": "5e8f16062ea3cd2c4a0d547876baa6f38cabf625"
+          }
+        },
+        {
+          "client_id": "209930100873-fm9d2dbr45ee8d2frsjj7cra6k3hftji.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyCX4hIn23IQPQFIksVPG9MlTkzQmCqi28Y"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "209930100873-fm9d2dbr45ee8d2frsjj7cra6k3hftji.apps.googleusercontent.com",
+              "client_type": 3
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
