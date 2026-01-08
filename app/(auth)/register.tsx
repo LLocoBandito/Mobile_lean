@@ -1,24 +1,50 @@
 import { useRouter } from "expo-router";
 import React, { useState } from "react";
-import { Text, TouchableOpacity, View } from "react-native";
-import AuthButton from "../../components/buttonprimary";
+import { Alert, Text, TouchableOpacity, View } from "react-native";
+import PrimaryButton from "../../components/PrimaryButton";
 import AuthInput from "../../components/inputfield";
+import { handleRegister } from "../../utils/login_handler";
 
 export default function RegisterScreen() {
   const router = useRouter();
 
-  // Simulasi state dummy untuk input
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [loading, setLoading] = useState(false);
 
-  const handleRegister = () => {
+  const registrationHandler = async () => {
     if (!name || !email || !password) {
-      alert("Please fill all fields");
+      Alert.alert("Error", "Semua kolom harus diisi.");
       return;
     }
-    alert("UI Only — Register Success (dummy)");
-    router.replace("../(tabs)");
+
+    setLoading(true);
+
+    try {
+      await handleRegister(email, password, name);
+
+      Alert.alert(
+        "Berhasil 🎉",
+        "Akun berhasil dibuat. Silakan cek email untuk verifikasi sebelum login."
+      );
+
+      router.replace("/(auth)/login");
+    } catch (error: any) {
+      let message = "Pendaftaran gagal.";
+
+      if (error.code === "auth/email-already-in-use") {
+        message = "Email sudah terdaftar.";
+      } else if (error.code === "auth/weak-password") {
+        message = "Password minimal 6 karakter.";
+      } else if (error.message) {
+        message = error.message;
+      }
+
+      Alert.alert("Gagal", message);
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (
@@ -27,7 +53,7 @@ export default function RegisterScreen() {
         flex: 1,
         justifyContent: "center",
         padding: 24,
-        backgroundColor: "#0F172A", // Dark background
+        backgroundColor: "#0F172A",
       }}
     >
       <Text
@@ -48,6 +74,7 @@ export default function RegisterScreen() {
         value={name}
         onChangeText={setName}
       />
+
       <AuthInput
         label="Email"
         placeholder="Your email"
@@ -55,6 +82,7 @@ export default function RegisterScreen() {
         value={email}
         onChangeText={setEmail}
       />
+
       <AuthInput
         label="Password"
         placeholder="Create password"
@@ -63,7 +91,11 @@ export default function RegisterScreen() {
         onChangeText={setPassword}
       />
 
-      <AuthButton title="Sign Up" onPress={handleRegister} />
+      <PrimaryButton
+        text={loading ? "Mendaftar..." : "Sign Up"}
+        onPress={registrationHandler}
+        loading={loading}
+      />
 
       <TouchableOpacity onPress={() => router.push("/(auth)/login")}>
         <Text

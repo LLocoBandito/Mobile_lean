@@ -1,0 +1,27 @@
+{
+  "cli": {
+    "version": ">= 16.26.0",
+    "appVersionSource": "remote"
+  },
+  "build": {
+    "development": {
+      "developmentClient": true,
+      "distribution": "internal"
+    },
+    "preview": {
+      "distribution": "internal",
+      "android": {
+        "buildType": "apk" // ← tambah baris ini saja!
+      }
+    },
+    "production": {
+      "autoIncrement": true,
+      "android": {
+        "buildType": "app-bundle" // ← ini tetap biar nanti kalau mau ke Play Store jadi AAB
+      }
+    }
+  },
+  "submit": {
+    "production": {}
+  }
+}

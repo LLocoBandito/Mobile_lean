@@ -1,144 +1,417 @@
 import { Feather } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
-import React, { useState } from "react";
 import {
+  collection,
+  deleteDoc,
+  doc,
+  getDocs,
+  query,
+  updateDoc,
+  where,
+} from "firebase/firestore";
+import React, { useCallback, useEffect, useState } from "react";
+import {
+  ActivityIndicator,
+  Alert,
   FlatList,
   Modal,
+  StatusBar,
   StyleSheet,
   Text,
   TextInput,
   TouchableOpacity,
   View,
 } from "react-native";
+import { auth, db } from "../../utils/firebaseConfig"; // Pastikan auth dan db di-import
+
+// --- INTERFACE SESI ---
+interface MonitoringSession {
+  id: string;
+  sessionName: string;
+  startPoint: { timestamp: string };
+  totalPoints: number;
+  createdAt: string;
+}
 
 export default function Manage() {
   const router = useRouter();
   const [modalVisible, setModalVisible] = useState(false);
   const [inputName, setInputName] = useState("");
+  const [dataList, setDataList] = useState<MonitoringSession[]>([]);
+  const [selectedSession, setSelectedSession] =
+    useState<MonitoringSession | null>(null);
 
-  // data dummy untuk tampilan
-  const dataDummy = [
-    { id: 1, name: "Data 1", value: 0.23 },
-    { id: 2, name: "Data 2", value: 0.45 },
-    { id: 3, name: "Data 3", value: 0.67 },
-  ];
+  // 🔥 STATE BARU UNTUK LOADING DAN REFRESH
+  const [initialLoading, setInitialLoading] = useState(true);
+  const [isRefreshing, setIsRefreshing] = useState(false);
+
+  // === FUNGSI FETCH DATA DENGAN FILTER USER ID ===
+  const fetchData = useCallback(async (isInitialLoad: boolean = false) => {
+    const user = auth.currentUser;
+
+    if (!user) {
+      setDataList([]);
+      setInitialLoading(false);
+      setIsRefreshing(false);
+      return;
+    }
+
+    try {
+      // Atur state loading yang benar
+      if (isInitialLoad) {
+        setInitialLoading(true);
+      } else {
+        setIsRefreshing(true);
+      }
+
+      // Query: Ambil hanya sesi yang dimiliki oleh pengguna yang sedang login
+      const sessionsRef = collection(db, "monitoring_sessions");
+      const q = query(sessionsRef, where("userId", "==", user.uid));
+
+      const querySnapshot = await getDocs(q);
+      const firebaseData: MonitoringSession[] = [];
+
+      querySnapshot.forEach((document) => {
+        const data = document.data();
+
+        firebaseData.push({
+          id: document.id,
+          sessionName: data.sessionName || "Sesi Tanpa Nama",
+          startPoint: data.startPoint,
+          totalPoints: data.totalPoints || 0,
+          createdAt:
+            data.createdAt ||
+            new Date(data.startPoint?.timestamp || 0).toISOString(),
+        });
+      });
+
+      // Sorting berdasarkan waktu terbaru (createdAt)
+      firebaseData.sort(
+        (a, b) =>
+          new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
+      );
+
+      setDataList(firebaseData);
+    } catch (error) {
+      console.error("Error fetching data:", error);
+      Alert.alert(
+        "Error",
+        "Gagal memuat data dari database. Periksa koneksi atau Firestore Rules."
+      );
+    } finally {
+      // Matikan semua indikator loading
+      setInitialLoading(false);
+      setIsRefreshing(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    fetchData(true); // Panggil dengan flag untuk pemuatan awal (initialLoad)
+  }, [fetchData]);
+
+  // 🔥 HANDLER REFRESH
+  const handleRefresh = () => {
+    fetchData(false); // Panggil fetchData tanpa isInitialLoad=true
+  };
+
+  // --- HANDLER HAPUS DATA ---
+  const handleDelete = (id: string) => {
+    Alert.alert("Hapus Sesi", "Yakin ingin menghapus sesi ini?", [
+      { text: "Batal", style: "cancel" },
+      {
+        text: "Hapus",
+        style: "destructive",
+        onPress: async () => {
+          try {
+            await deleteDoc(doc(db, "monitoring_sessions", id));
+            setDataList((prev) => prev.filter((item) => item.id !== id));
+            Alert.alert("Sukses", "Sesi berhasil dihapus!");
+          } catch (error) {
+            Alert.alert("Error", "Gagal menghapus sesi.");
+          }
+        },
+      },
+    ]);
+  };
+
+  // --- HANDLER EDIT DATA ---
+  const openEditModal = (item: MonitoringSession) => {
+    setSelectedSession(item);
+    setInputName(item.sessionName);
+    setModalVisible(true);
+  };
+
+  const handleEditSave = async () => {
+    if (!selectedSession || !inputName.trim()) {
+      Alert.alert("Perhatian", "Nama sesi tidak boleh kosong!");
+      return;
+    }
+
+    try {
+      await updateDoc(doc(db, "monitoring_sessions", selectedSession.id), {
+        sessionName: inputName.trim(),
+      });
+
+      setDataList((prev) =>
+        prev.map((item) =>
+          item.id === selectedSession.id
+            ? { ...item, sessionName: inputName.trim() }
+            : item
+        )
+      );
+
+      setModalVisible(false);
+      setInputName("");
+      setSelectedSession(null);
+      Alert.alert("Sukses", "Nama sesi berhasil diubah!");
+    } catch (error) {
+      Alert.alert("Error", "Gagal mengubah nama sesi.");
+    }
+  };
+
+  // --- RENDER ITEM FLATLIST ---
+  const renderItem = ({ item }: { item: MonitoringSession }) => (
+    <View style={styles.card}>
+      <View style={styles.cardContent}>
+        <Text style={styles.sessionName} numberOfLines={1}>
+          {item.sessionName}
+        </Text>
+        <Text style={styles.sessionInfo}>
+          Titik GPS: {item.totalPoints.toLocaleString()}
+        </Text>
+        <Text style={styles.sessionDate}>
+          {new Date(item.createdAt).toLocaleString("id-ID", {
+            dateStyle: "medium",
+            timeStyle: "short",
+          })}
+        </Text>
+      </View>
+
+      <View style={styles.actionButtons}>
+        <TouchableOpacity
+          style={styles.actionBtn}
+          onPress={() => openEditModal(item)}
+        >
+          <Feather name="edit-2" size={22} color="#A78BFA" />
+        </TouchableOpacity>
+        <TouchableOpacity
+          style={styles.actionBtn}
+          onPress={() => handleDelete(item.id)}
+        >
+          <Feather name="trash-2" size={22} color="#F87171" />
+        </TouchableOpacity>
+        <TouchableOpacity
+          style={styles.actionBtn}
+          // Navigasi ke halaman detail
+          onPress={() => router.push(`/detail/${item.id}`)}
+        >
+          <Feather name="eye" size={24} color="#60A5FA" />
+        </TouchableOpacity>
+      </View>
+    </View>
+  );
 
   return (
-    <View style={styles.container}>
-      <Text style={styles.title}>Data Tersimpan</Text>
+    <>
+      <StatusBar barStyle="light-content" backgroundColor="#0F172A" />
+      <View style={styles.container}>
+        {/* Gradient overlay */}
+        <View style={styles.overlay} pointerEvents="none" />
 
-      <FlatList
-        data={dataDummy}
-        keyExtractor={(item) => item.id.toString()}
-        renderItem={({ item }) => (
-          <View style={styles.card}>
-            <View>
-              <Text style={styles.cardName}>{item.name}</Text>
-              <Text style={styles.cardValue}>Rata-rata: {item.value}</Text>
-            </View>
-            <View style={styles.actionContainer}>
-              <TouchableOpacity
-                onPress={() => setModalVisible(true)}
-                accessibilityLabel="Edit"
-              >
-                <Feather name="edit-2" size={20} color="#4F46E5" />
-              </TouchableOpacity>
-              <TouchableOpacity accessibilityLabel="Hapus">
-                <Feather name="trash-2" size={20} color="#EF4444" />
-              </TouchableOpacity>
-              <TouchableOpacity
-                onPress={() => router.push("/detail")}
-                accessibilityLabel="Detail"
-              >
-                <Feather name="info" size={20} color="#3B82F6" />
-              </TouchableOpacity>
-            </View>
-          </View>
-        )}
-      />
-
-      {/* Modal edit (layout saja) */}
-      <Modal animationType="slide" transparent visible={modalVisible}>
-        <View style={styles.modalOverlay}>
-          <View style={styles.modalContainer}>
-            <Text style={styles.modalTitle}>Edit Data</Text>
-            <TextInput
-              placeholder="Masukkan nama baru"
-              style={styles.input}
-              value={inputName}
-              onChangeText={setInputName}
-            />
-            <View style={styles.modalButtons}>
-              <TouchableOpacity
-                style={[styles.modalButton, { backgroundColor: "#4ADE80" }]}
-                onPress={() => setModalVisible(false)}
-              >
-                <Text style={styles.modalButtonText}>Simpan</Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={[styles.modalButton, { backgroundColor: "#F87171" }]}
-                onPress={() => setModalVisible(false)}
-              >
-                <Text style={styles.modalButtonText}>Batal</Text>
-              </TouchableOpacity>
-            </View>
-          </View>
+        <View style={styles.header}>
+          <Text style={styles.title}>Data Sesi Monitoring 📊</Text>
+          <Text style={styles.subtitle}>Kelola semua sesi monitoring kamu</Text>
         </View>
-      </Modal>
-    </View>
+
+        {/* 🔥 Gunakan initialLoading untuk Pemuatan Awal */}
+        {initialLoading ? (
+          <View style={styles.loadingContainer}>
+            <ActivityIndicator size="large" color="#60A5FA" />
+            <Text style={styles.loadingText}>Memuat data sesi...</Text>
+          </View>
+        ) : dataList.length === 0 ? (
+          <View style={styles.emptyContainer}>
+            <Feather name="database" size={80} color="#475569" />
+            <Text style={styles.emptyText}>Belum ada sesi monitoring</Text>
+            {auth.currentUser ? (
+              <Text style={styles.emptySubtext}>
+                Mulai monitoring di tab **Home** untuk melihat data di sini
+              </Text>
+            ) : (
+              <Text style={styles.emptySubtext}>
+                Anda perlu **login** untuk melihat dan menyimpan data sesi.
+              </Text>
+            )}
+          </View>
+        ) : (
+          <FlatList
+            data={dataList}
+            keyExtractor={(item) => item.id}
+            renderItem={renderItem}
+            contentContainerStyle={{ paddingBottom: 100 }}
+            showsVerticalScrollIndicator={false}
+            // 🔥 Properti Pull-to-Refresh
+            refreshing={isRefreshing}
+            onRefresh={handleRefresh}
+          />
+        )}
+
+        {/* Modal Edit Nama Sesi */}
+        <Modal
+          animationType="fade"
+          transparent
+          visible={modalVisible}
+          onRequestClose={() => setModalVisible(false)}
+        >
+          <View style={styles.modalOverlay}>
+            <View style={styles.modalContent}>
+              <Text style={styles.modalTitle}>Ubah Nama Sesi</Text>
+              <TextInput
+                style={styles.modalInput}
+                placeholder="Masukkan nama baru..."
+                placeholderTextColor="#94A3B8"
+                value={inputName}
+                onChangeText={setInputName}
+                autoFocus
+              />
+              <View style={styles.modalActions}>
+                <TouchableOpacity
+                  style={[styles.modalBtn, styles.modalBtnCancel]}
+                  onPress={() => setModalVisible(false)}
+                >
+                  <Text style={styles.modalBtnText}>Batal</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={[styles.modalBtn, styles.modalBtnSave]}
+                  onPress={handleEditSave}
+                >
+                  <Text style={[styles.modalBtnText, { color: "#fff" }]}>
+                    Simpan
+                  </Text>
+                </TouchableOpacity>
+              </View>
+            </View>
+          </View>
+        </Modal>
+      </View>
+    </>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: "#F9FAFB", padding: 20 },
-  title: {
-    fontSize: 22,
-    fontWeight: "700",
-    color: "#111827",
-    marginBottom: 10,
+  container: { flex: 1, backgroundColor: "#0F172A" },
+  overlay: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: "rgba(30, 41, 59, 0.4)",
   },
-  card: {
-    backgroundColor: "#fff",
-    borderRadius: 12,
-    padding: 15,
-    marginVertical: 8,
-    flexDirection: "row",
-    justifyContent: "space-between",
+
+  header: { padding: 24, paddingTop: 60, alignItems: "center" },
+  title: { fontSize: 28, fontWeight: "bold", color: "#F8FAFC" },
+  subtitle: { fontSize: 16, color: "#94A3B8", marginTop: 8 },
+
+  loadingContainer: { flex: 1, justifyContent: "center", alignItems: "center" },
+  loadingText: { color: "#94A3B8", marginTop: 16, fontSize: 16 },
+
+  emptyContainer: {
+    flex: 1,
+    justifyContent: "center",
     alignItems: "center",
-    elevation: 2,
+    paddingHorizontal: 40,
   },
-  cardName: { fontSize: 16, fontWeight: "600", color: "#111827" },
-  cardValue: { color: "#6B7280", fontSize: 13 },
-  actionContainer: { flexDirection: "row", gap: 15, alignItems: "center" },
-  // Removed text styles; colors now applied on icons
-  // editText: { color: "#4F46E5", fontWeight: "600" },
-  // deleteText: { color: "#EF4444", fontWeight: "600" },
-  // detailText: { color: "#3B82F6", fontWeight: "600" },
+  emptyText: {
+    color: "#F8FAFC",
+    fontSize: 20,
+    fontWeight: "600",
+    marginTop: 20,
+  },
+  emptySubtext: {
+    color: "#94A3B8",
+    fontSize: 15,
+    marginTop: 8,
+    textAlign: "center",
+  },
+
+  card: {
+    marginHorizontal: 20,
+    marginVertical: 10,
+    backgroundColor: "rgba(30, 41, 59, 0.95)",
+    borderRadius: 20,
+    padding: 20,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    borderWidth: 1,
+    borderColor: "rgba(148, 163, 184, 0.2)",
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 10 },
+    shadowOpacity: 0.4,
+    shadowRadius: 20,
+    elevation: 18,
+  },
+  cardContent: { flex: 1 },
+  sessionName: { color: "#F8FAFC", fontSize: 18, fontWeight: "bold" },
+  sessionInfo: { color: "#94A3B8", fontSize: 14, marginTop: 6 },
+  sessionDate: { color: "#64748B", fontSize: 13, marginTop: 4 },
+
+  actionButtons: { flexDirection: "row", gap: 18 },
+  actionBtn: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    backgroundColor: "rgba(255,255,255,0.1)",
+    justifyContent: "center",
+    alignItems: "center",
+    shadowColor: "#000",
+    shadowOpacity: 0.3,
+    elevation: 8,
+  },
 
   modalOverlay: {
     flex: 1,
-    backgroundColor: "rgba(0,0,0,0.3)",
+    backgroundColor: "rgba(0,0,0,0.8)",
     justifyContent: "center",
     alignItems: "center",
   },
-  modalContainer: {
-    backgroundColor: "#fff",
-    width: "85%",
-    borderRadius: 12,
-    padding: 20,
+  modalContent: {
+    width: "88%",
+    backgroundColor: "#1E293B",
+    borderRadius: 24,
+    padding: 28,
+    borderWidth: 1,
+    borderColor: "#475569",
+    shadowColor: "#000",
+    shadowOpacity: 0.6,
+    elevation: 25,
   },
-  modalTitle: { fontSize: 18, fontWeight: "700", marginBottom: 15 },
-  input: {
-    backgroundColor: "#F3F4F6",
-    padding: 10,
-    borderRadius: 8,
-    marginBottom: 10,
+  modalTitle: {
+    color: "#F8FAFC",
+    fontSize: 22,
+    fontWeight: "bold",
+    textAlign: "center",
+    marginBottom: 20,
   },
-  modalButtons: {
+  modalInput: {
+    backgroundColor: "#0F172A",
+    color: "#F8FAFC",
+    padding: 16,
+    borderRadius: 16,
+    fontSize: 16,
+    borderWidth: 1,
+    borderColor: "#475569",
+    marginBottom: 24,
+  },
+  modalActions: {
     flexDirection: "row",
-    justifyContent: "space-around",
-    marginTop: 10,
+    justifyContent: "space-between",
+    gap: 16,
   },
-  modalButton: { paddingVertical: 10, paddingHorizontal: 20, borderRadius: 8 },
-  modalButtonText: { color: "#fff", fontWeight: "700" },
+  modalBtn: {
+    flex: 1,
+    paddingVertical: 16,
+    borderRadius: 16,
+    alignItems: "center",
+  },
+  modalBtnCancel: { backgroundColor: "rgba(148, 163, 184, 0.3)" },
+  modalBtnSave: { backgroundColor: "#10B981" },
+  modalBtnText: { color: "#F8FAFC", fontWeight: "bold", fontSize: 16 },
 });

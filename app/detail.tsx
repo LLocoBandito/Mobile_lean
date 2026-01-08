@@ -1,7 +1,7 @@
-import * as Location from "expo-location";
-import { useRouter } from "expo-router";
-import { Accelerometer, Gyroscope } from "expo-sensors";
-import React, { useEffect, useState } from "react";
+import { Ionicons } from "@expo/vector-icons";
+import { RouteProp, useNavigation, useRoute } from "@react-navigation/native";
+import { doc, getDoc } from "firebase/firestore";
+import React, { useEffect, useMemo, useState } from "react";
 import {
   ActivityIndicator,
   Dimensions,
@@ -11,192 +11,271 @@ import {
   TouchableOpacity,
   View,
 } from "react-native";
-import MapView, { Marker } from "react-native-maps";
+import { WebView } from "react-native-webview";
+import { db } from "../utils/firebaseConfig";
 
-export default function Detail() {
-  const router = useRouter();
+const { width: SCREEN_WIDTH } = Dimensions.get("window");
+
+type RootStackParamList = {
+  DetailScreen: { id: string };
+  ManageScreen: undefined;
+};
+
+type DetailRouteProp = RouteProp<RootStackParamList, "DetailScreen">;
+
+/* ===================== LEAFLET HTML ===================== */
+const getLeafletHtml = (path: any[]) => {
+  const first =
+    path.length > 0 ? path[0] : { latitude: -8.65, longitude: 115.22 };
+  const last = path.length > 0 ? path[path.length - 1] : first;
+
+  const polyline = JSON.stringify(path.map((p) => [p.latitude, p.longitude]));
+
+  return `
+  <!DOCTYPE html>
+  <html>
+    <head>
+      <meta charset="utf-8" />
+      <meta name="viewport" content="width=device-width, initial-scale=1.0">
+      <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
+      <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+      <style>
+        html, body { margin:0; padding:0; background:#0F172A; }
+        #map { width:100vw; height:100vh; }
+        .leaflet-tile {
+          filter: brightness(0.6) invert(1) contrast(3) hue-rotate(200deg);
+        }
+      </style>
+    </head>
+    <body>
+      <div id="map"></div>
+      <script>
+        const map = L.map('map', { zoomControl:false })
+          .setView([${first.latitude}, ${first.longitude}], 15);
+
+        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png')
+          .addTo(map);
+
+        const poly = L.polyline(${polyline}, {
+          color:'#3B82F6',
+          weight:5
+        }).addTo(map);
+
+        L.circleMarker(
+          [${last.latitude}, ${last.longitude}],
+          { radius:7, color:'#EF4444', fillOpacity:1 }
+        ).addTo(map);
+
+        map.fitBounds(poly.getBounds(), { padding:[20,20] });
+      </script>
+    </body>
+  </html>
+  `;
+};
+
+/* ===================== SCREEN ===================== */
+export default function DetailScreen() {
+  const route = useRoute<DetailRouteProp>();
+  const navigation = useNavigation();
+  const { id } = route.params;
+
+  const [session, setSession] = useState<any>(null);
   const [loading, setLoading] = useState(true);
-  const [tiltData, setTiltData] = useState({
-    left: 0,
-    right: 0,
-    gforce: 0,
-  });
-  const [location, setLocation] = useState<any>(null);
 
   useEffect(() => {
-    let accelSub: any;
-    let gyroSub: any;
-
-    (async () => {
-      const { status } = await Location.requestForegroundPermissionsAsync();
-      if (status === "granted") {
-        const loc = await Location.getCurrentPositionAsync({});
-        setLocation(loc.coords);
+    const fetch = async () => {
+      try {
+        const ref = doc(db, "monitoring_sessions", id);
+        const snap = await getDoc(ref);
+        if (snap.exists()) {
+          setSession({ id: snap.id, ...snap.data() });
+        }
+      } catch (e) {
+        console.error("Firestore error:", e);
+      } finally {
+        setLoading(false);
       }
-    })();
-
-    Accelerometer.setUpdateInterval(300);
-    Gyroscope.setUpdateInterval(300);
-
-    accelSub = Accelerometer.addListener(({ x, y, z }) => {
-      const gforce = Math.sqrt(x * x + y * y + z * z).toFixed(2);
-      setTiltData((prev) => ({ ...prev, gforce: parseFloat(gforce) }));
-    });
-
-    gyroSub = Gyroscope.addListener(({ x, y }) => {
-      const left = y < 0 ? parseFloat(Math.abs(y * 45).toFixed(2)) : 0;
-      const right = y > 0 ? parseFloat(Math.abs(y * 45).toFixed(2)) : 0;
-
-      setTiltData((prev) => ({
-        ...prev,
-        left,
-        right,
-      }));
-    });
-
-    setTimeout(() => setLoading(false), 1500);
-
-    return () => {
-      accelSub && accelSub.remove();
-      gyroSub && gyroSub.remove();
     };
-  }, []);
+    fetch();
+  }, [id]);
 
-  const handleExit = () => {
-    router.push("/manage"); // ✅ arahkan ke halaman Manage
-  };
+  const path = session?.path || [];
+
+  /* ===================== AVG ROLL ===================== */
+  const averages = useMemo(() => {
+    if (!path.length) return { avgRight: "0", avgLeft: "0" };
+
+    let r = 0,
+      l = 0,
+      cr = 0,
+      cl = 0;
+
+    path.forEach((p: any) => {
+      if (p.roll > 0) {
+        r += p.roll;
+        cr++;
+      } else if (p.roll < 0) {
+        l += Math.abs(p.roll);
+        cl++;
+      }
+    });
+
+    return {
+      avgRight: cr ? (r / cr).toFixed(1) : "0",
+      avgLeft: cl ? (l / cl).toFixed(1) : "0",
+    };
+  }, [path]);
+
+  if (loading) {
+    return (
+      <View style={styles.loading}>
+        <ActivityIndicator size="large" color="#3B82F6" />
+        <Text style={{ color: "#E5E7EB", marginTop: 10 }}>
+          Memuat detail...
+        </Text>
+      </View>
+    );
+  }
 
   return (
-    <ScrollView style={styles.container}>
-      <Text style={styles.header}>Detail Monitoring</Text>
-
-      {/* PETA GPS */}
-      <View style={styles.mapContainer}>
-        {loading || !location ? (
-          <View style={styles.mapPlaceholder}>
-            <ActivityIndicator size="large" color="#2563EB" />
-            <Text style={styles.mapLoadingText}>Memuat peta...</Text>
-          </View>
-        ) : (
-          <MapView
-            style={styles.map}
-            initialRegion={{
-              latitude: location.latitude,
-              longitude: location.longitude,
-              latitudeDelta: 0.01,
-              longitudeDelta: 0.01,
-            }}
-          >
-            <Marker
-              coordinate={{
-                latitude: location.latitude,
-                longitude: location.longitude,
-              }}
-              title="Lokasi Sekarang"
-              description="Titik awal perjalanan"
-            />
-          </MapView>
-        )}
+    <View style={styles.container}>
+      {/* HEADER */}
+      <View style={styles.headerRow}>
+        <TouchableOpacity onPress={() => navigation.goBack()}>
+          <Ionicons name="arrow-back" size={28} color="#F9FAFB" />
+        </TouchableOpacity>
+        <Text style={styles.header} numberOfLines={1}>
+          {session?.sessionName || "Detail Perjalanan"}
+        </Text>
       </View>
 
-      {/* DATA SENSOR */}
-      <View style={styles.dataContainer}>
-        <Text style={styles.sectionTitle}>📊 Data Sensor</Text>
-
-        <View style={styles.dataRow}>
-          <Text style={styles.dataLabel}>Kemiringan Kiri:</Text>
-          <Text style={styles.dataValue}>{tiltData.left}°</Text>
+      <ScrollView showsVerticalScrollIndicator={false}>
+        {/* MAP */}
+        <View style={styles.mapContainer}>
+          <WebView
+            key={`map-${id}-${path.length}`}
+            source={{ html: getLeafletHtml(path) }}
+            style={{ flex: 1, backgroundColor: "#0F172A" }}
+            originWhitelist={["*"]}
+            javaScriptEnabled
+            domStorageEnabled
+          />
         </View>
 
-        <View style={styles.dataRow}>
-          <Text style={styles.dataLabel}>Kemiringan Kanan:</Text>
-          <Text style={styles.dataValue}>{tiltData.right}°</Text>
+        {/* SUMMARY */}
+        <View style={styles.card}>
+          <Text style={styles.cardTitle}>Ringkasan Sesi</Text>
+
+          <Text style={styles.cardText}>
+            ⚡ 0–60 km/h:{" "}
+            {session?.accel_0_60 != null
+              ? `${session.accel_0_60.toFixed(2)} s`
+              : "-"}
+          </Text>
+
+          <Text style={styles.cardText}>
+            ⚡ 60–100 km/h:{" "}
+            {session?.accel_60_100 != null
+              ? `${session.accel_60_100.toFixed(2)} s`
+              : "-"}
+          </Text>
+
+          <Text style={styles.cardText}>
+            ⚡ 100–150 km/h:{" "}
+            {session?.accel_100_150 != null
+              ? `${session.accel_100_150.toFixed(2)} s`
+              : "-"}
+          </Text>
+
+          <Text style={styles.cardText}>
+            📐 Avg Roll Kanan: {averages.avgRight}°
+          </Text>
+          <Text style={styles.cardText}>
+            📐 Avg Roll Kiri: {averages.avgLeft}°
+          </Text>
         </View>
 
-        <View style={styles.dataRow}>
-          <Text style={styles.dataLabel}>G-Force Akselerasi:</Text>
-          <Text style={styles.dataValue}>{tiltData.gforce} g</Text>
-        </View>
-      </View>
+        {/* LOG */}
+        <View style={styles.card}>
+          <Text style={styles.cardTitle}>Log Perjalanan ({path.length})</Text>
 
-      {/* TOMBOL KELUAR */}
-      <TouchableOpacity style={styles.exitButton} onPress={handleExit}>
-        <Text style={styles.exitButtonText}>Keluar</Text>
-      </TouchableOpacity>
-    </ScrollView>
+          {path.map((p: any, i: number) => (
+            <View key={i} style={styles.row}>
+              <Text style={styles.idx}>{i + 1}</Text>
+              <View style={{ flex: 1 }}>
+                <Text style={styles.rowText}>{p.speed || 0} km/h</Text>
+                <Text style={styles.sub}>
+                  R:{p.roll > 0 ? p.roll : 0}° | L:
+                  {p.roll < 0 ? Math.abs(p.roll) : 0}° | P:
+                  {p.pitch?.toFixed(1)}°
+                </Text>
+              </View>
+              <Text style={styles.time}>
+                {new Date(p.timestamp).toLocaleTimeString()}
+              </Text>
+            </View>
+          ))}
+        </View>
+      </ScrollView>
+    </View>
   );
 }
 
-const { width } = Dimensions.get("window");
-
+/* ===================== STYLES ===================== */
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: "#F9FAFB",
-    padding: 20,
-  },
-  header: {
-    fontSize: 22,
-    fontWeight: "700",
-    color: "#111827",
-    marginBottom: 15,
-  },
-  mapContainer: {
-    height: 300,
-    borderRadius: 16,
-    overflow: "hidden",
-    marginBottom: 20,
-    backgroundColor: "#E5E7EB",
-  },
-  map: {
-    flex: 1,
-    width: width - 40,
-    height: 300,
-  },
-  mapPlaceholder: {
+  container: { flex: 1, backgroundColor: "#0F172A" },
+  loading: {
     flex: 1,
     justifyContent: "center",
     alignItems: "center",
+    backgroundColor: "#0F172A",
   },
-  mapLoadingText: {
-    color: "#6B7280",
-    marginTop: 8,
+  headerRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    padding: 20,
+    paddingTop: 50,
   },
-  dataContainer: {
-    backgroundColor: "#fff",
-    borderRadius: 14,
-    padding: 15,
-    elevation: 2,
-  },
-  sectionTitle: {
-    fontSize: 18,
+  header: {
+    color: "#F9FAFB",
+    fontSize: 20,
     fontWeight: "700",
-    color: "#111827",
+    marginLeft: 15,
+    flex: 1,
+  },
+  mapContainer: {
+    height: 320,
+    marginHorizontal: 20,
+    borderRadius: 20,
+    overflow: "hidden",
+    borderWidth: 1,
+    borderColor: "#334155",
+  },
+  card: {
+    backgroundColor: "#1E293B",
+    margin: 20,
+    padding: 20,
+    borderRadius: 20,
+  },
+  cardTitle: {
+    color: "#F9FAFB",
+    fontSize: 18,
+    fontWeight: "600",
     marginBottom: 10,
   },
-  dataRow: {
+  cardText: {
+    color: "#E5E7EB",
+    fontSize: 15,
+    marginVertical: 4,
+  },
+  row: {
     flexDirection: "row",
-    justifyContent: "space-between",
-    paddingVertical: 6,
+    paddingVertical: 12,
+    borderBottomWidth: 1,
+    borderColor: "#334155",
   },
-  dataLabel: {
-    color: "#6B7280",
-    fontWeight: "500",
-  },
-  dataValue: {
-    fontWeight: "700",
-    color: "#111827",
-  },
-  exitButton: {
-    backgroundColor: "#3B82F6",
-    paddingVertical: 14,
-    borderRadius: 10,
-    alignItems: "center",
-    marginTop: 25,
-  },
-  exitButtonText: {
-    color: "#fff",
-    fontSize: 16,
-    fontWeight: "bold",
-  },
+  idx: { color: "#94A3B8", width: 30 },
+  rowText: { color: "#E5E7EB", fontWeight: "600" },
+  sub: { color: "#94A3B8", fontSize: 12 },
+  time: { color: "#64748B", fontSize: 12 },
 });
