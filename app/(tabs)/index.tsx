@@ -121,6 +121,7 @@ export default function Home() {
   const [displayRoll, setDisplayRoll] = useState(0);
   const [currentSpeed, setCurrentSpeed] = useState(0);
   const [mapPageIndex, setMapPageIndex] = useState(0);
+  const accelStageRef = useRef<0 | 60 | 100 | 150>(0);
 
   const [isSpeedBeeping, setIsSpeedBeeping] = useState(false);
   const [isRollBeeping, setIsRollBeeping] = useState(false);
@@ -141,6 +142,11 @@ export default function Home() {
   const rotateAnim = useRef(new Animated.Value(0)).current;
   const lastSpeedRef = useRef(0);
   const accelStartTimeRef = useRef<number | null>(null);
+  const completedStagesRef = useRef({
+    zeroTo60: false,
+    sixtyTo100: false,
+    hundredTo150: false,
+  });
 
   const [subscription, setSubscription] = useState<any>(null); // Accelerometer sub
   const [locationWatcher, setLocationWatcher] =
@@ -346,29 +352,106 @@ export default function Home() {
       return;
     }
 
-    // 1. Location Watcher (GPS & Speed)
+    // 1. Location Watcher
     const watcher = await Location.watchPositionAsync(
       {
         accuracy: Location.Accuracy.BestForNavigation,
-        timeInterval: 1000,
-        distanceInterval: 3,
+        timeInterval: 500, // Update lebih cepat (500ms) untuk akurasi timer
+        distanceInterval: 0, // Set 0 agar update terus meski bergerak sedikit
       },
       (loc) => {
         const speed = loc.coords.speed ? Math.round(loc.coords.speed * 3.6) : 0;
+        // Ambil speed sebelumnya DARI REF sebelum diupdate
         const prevSpeed = lastSpeedRef.current;
-        setCurrentSpeed(speed);
-        lastSpeedRef.current = speed;
 
+        setCurrentSpeed(speed);
+
+        // Animasi Speedometer
         Animated.timing(speedAnim, {
           toValue: Math.min(speed, 160),
           duration: 400,
           useNativeDriver: false,
         }).start();
 
-        if (status === "Connected") {
-          updateAccelerationTimes(speed, prevSpeed);
+        // === LOGIKA PENGHITUNGAN AKSELERASI DISINI ===
+        // Kita pakai Ref completedStagesRef agar tidak terkena stale closure
+        if (status === "Connected" || true) {
+          // Force true logic check inside watcher context
+          const now = Date.now();
+
+          // A. DETEKSI START (0 km/h -> Bergerak)
+          // Jika speed turun ke 0/1, reset timer start (mobil berhenti)
+          if (speed <= 1 && !completedStagesRef.current.zeroTo60) {
+            accelStartTimeRef.current = null;
+          }
+          // Start Timer saat speed > 2 km/h
+          else if (
+            speed > 2 &&
+            !accelStartTimeRef.current &&
+            !completedStagesRef.current.zeroTo60
+          ) {
+            accelStartTimeRef.current = now;
+          }
+
+          // B. LOGIKA 0 - 60 KM/H
+          if (
+            prevSpeed < 60 &&
+            speed >= 60 &&
+            !completedStagesRef.current.zeroTo60
+          ) {
+            const startTime = accelStartTimeRef.current || now; // Fallback safety
+            const duration = (now - startTime) / 1000;
+
+            // 1. Langsung update State agar muncul di layar
+            setAccelTimes((prev) => ({ ...prev, zeroTo60: duration }));
+
+            // 2. Tandai selesai di Ref
+            completedStagesRef.current.zeroTo60 = true;
+
+            // 3. Reset timer untuk start hitungan 60-100 berikutnya
+            accelStartTimeRef.current = now;
+
+            // 4. Beri getaran SUKSES agar user tahu sudah tercatat tanpa melihat layar
+            Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+          }
+
+          // C. LOGIKA 60 - 100 KM/H
+          else if (
+            prevSpeed < 100 &&
+            speed >= 100 &&
+            completedStagesRef.current.zeroTo60 &&
+            !completedStagesRef.current.sixtyTo100
+          ) {
+            const startTime = accelStartTimeRef.current || now;
+            const duration = (now - startTime) / 1000;
+
+            setAccelTimes((prev) => ({ ...prev, sixtyTo100: duration }));
+            completedStagesRef.current.sixtyTo100 = true;
+            accelStartTimeRef.current = now; // Reset untuk 100-150
+            Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+          }
+
+          // D. LOGIKA 100 - 150 KM/H
+          else if (
+            prevSpeed < 150 &&
+            speed >= 150 &&
+            completedStagesRef.current.sixtyTo100 &&
+            !completedStagesRef.current.hundredTo150
+          ) {
+            const startTime = accelStartTimeRef.current || now;
+            const duration = (now - startTime) / 1000;
+
+            setAccelTimes((prev) => ({ ...prev, hundredTo150: duration }));
+            completedStagesRef.current.hundredTo150 = true;
+            accelStartTimeRef.current = null; // Selesai
+            Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+          }
         }
 
+        // Update Ref Speed Terakhir
+        lastSpeedRef.current = speed;
+
+        // Simpan titik lokasi
         setLocationPoints((prev) => [
           ...prev,
           {
@@ -384,12 +467,11 @@ export default function Home() {
     );
     setLocationWatcher(watcher);
 
-    // 2. Accelerometer Watcher (Roll & Pitch)
+    // 2. Accelerometer Watcher (Tetap sama seperti kode Anda)
     Accelerometer.setUpdateInterval(100);
     const sub = Accelerometer.addListener(({ x, y, z }) => {
+      // ... (kode accelerometer Anda tetap sama)
       let rollRad: number, pitchRad: number;
-
-      // Hitung Roll/Pitch berdasarkan orientasi layar saat ini
       if (orientationMode === "Portrait") {
         rollRad = Math.atan2(-x, z);
         pitchRad = Math.atan2(y, Math.sqrt(x * x + z * z));
@@ -397,10 +479,8 @@ export default function Home() {
         rollRad = Math.atan2(y, z);
         pitchRad = Math.atan2(-x, Math.sqrt(y * y + z * z));
       }
-
       const rollDeg = (rollRad * 180) / Math.PI;
       const pitchDeg = (pitchRad * 180) / Math.PI;
-      // Batasi roll agar tampilan visual tidak berlebihan
       const clampedRoll = Math.max(
         -MAX_ROLL_ANGLE,
         Math.min(MAX_ROLL_ANGLE, rollDeg)
@@ -437,17 +517,23 @@ export default function Home() {
   }, [subscription, locationWatcher]);
 
   const startMonitoring = async () => {
-    if (status === "Connected") stopMonitoring(); // Stop yang lama jika ada
+    if (status === "Connected") stopMonitoring();
 
     setLocationPoints([]);
     setAccelTimes({ zeroTo60: null, sixtyTo100: null, hundredTo150: null });
+
+    // RESET Ref disini
     accelStartTimeRef.current = null;
     lastSpeedRef.current = 0;
+    completedStagesRef.current = {
+      zeroTo60: false,
+      sixtyTo100: false,
+      hundredTo150: false,
+    };
 
     await activateMonitoring();
     setStatus("Connected");
   };
-
   // Hapus fungsi togglePause
   /*
   const togglePause = async () => {
