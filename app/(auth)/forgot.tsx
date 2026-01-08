@@ -1,7 +1,8 @@
 import { Ionicons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
 import React, { useState } from "react";
-import { Alert, StyleSheet, Text, TouchableOpacity, View } from "react-native";
+// PERBAIKAN 1: Tambahkan KeyboardAvoidingView dan Platform di sini
+import { Alert, KeyboardAvoidingView, Platform, StyleSheet, Text, TouchableOpacity, View } from "react-native";
 import AuthButton from "../../components/PrimaryButton";
 import AuthInput from "../../components/inputfield";
 import { handlePasswordReset } from "../../utils/login_handler";
@@ -69,8 +70,11 @@ export default function ForgotPasswordScreen() {
         />
 
         <View style={{ marginTop: 20 }}>
+          {/* PERBAIKAN 2: Jika eror 'title' tetap muncul, ganti 'title' menjadi 
+            nama prop yang benar (misal: label atau text) di bawah ini.
+          */}
           <AuthButton
-            title={loading ? "Loading..." : "Kirim Link Reset"}
+            text={loading ? "Loading..." : "Kirim Link Reset"}
             onPress={loading ? () => {} : handleReset}
           />
         </View>

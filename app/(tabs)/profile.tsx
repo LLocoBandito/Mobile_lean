@@ -9,16 +9,16 @@ import { signOut } from "firebase/auth";
 import { doc, getDoc, updateDoc } from "firebase/firestore";
 import React, { useEffect, useState } from "react";
 import {
-  ActivityIndicator,
-  Alert,
-  Dimensions,
-  Image,
-  ScrollView,
-  StatusBar,
-  StyleSheet,
-  Text,
-  TouchableOpacity,
-  View,
+    ActivityIndicator,
+    Alert,
+    Dimensions,
+    Image,
+    ScrollView,
+    StatusBar,
+    StyleSheet,
+    Text,
+    TouchableOpacity,
+    View,
 } from "react-native";
 import { auth, db } from "../../utils/firebaseConfig";
 
@@ -89,22 +89,7 @@ export default function ProfileScreen() {
     fetchProfile();
   }, [user]);
 
-<<<<<<< HEAD
-  const fetchProfile = async () => {
-    try {
-      const docRef = doc(db, "users", userId);
-      const snap = await getDoc(docRef);
-      if (snap.exists()) setProfile(snap.data());
-    } catch (e) {
-      console.error(e);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-=======
   // 🔥 UPLOAD CLOUDINARY
->>>>>>> 9527ca4677aeadf4909e8213e5184278a9bf0dad
   const pickAndUploadImage = async () => {
     const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
     if (!permission.granted) {
@@ -115,12 +100,8 @@ export default function ProfileScreen() {
     const result = await ImagePicker.launchImageLibraryAsync({
       allowsEditing: true,
       aspect: [1, 1],
-<<<<<<< HEAD
-      quality: 0.9,
-=======
       quality: 0.7,
       base64: true,
->>>>>>> 9527ca4677aeadf4909e8213e5184278a9bf0dad
     });
 
     if (result.canceled || !result.assets || !result.assets[0].base64) return;
@@ -133,13 +114,6 @@ export default function ProfileScreen() {
       data.append("file", `data:image/jpeg;base64,${base64Image}`);
       data.append("upload_preset", CLOUDINARY_UPLOAD_PRESET);
 
-<<<<<<< HEAD
-    await updateDoc(doc(db, "users", userId), { photoURL });
-    setProfile({ ...profile, photoURL });
-
-    setUploading(false);
-    Alert.alert("Sukses", "Foto profil berhasil diupdate!");
-=======
       const response = await fetch(CLOUDINARY_URL, {
         method: "POST",
         body: data,
@@ -163,7 +137,6 @@ export default function ProfileScreen() {
     } finally {
       setUploading(false);
     }
->>>>>>> 9527ca4677aeadf4909e8213e5184278a9bf0dad
   };
 
   // 🔥 LOGOUT
@@ -181,24 +154,6 @@ export default function ProfileScreen() {
     ]);
   };
 
-<<<<<<< HEAD
-  return (
-    <View style={styles.container}>
-      <StatusBar barStyle="light-content" />
-
-      {/* HEADER ELEGAN */}
-      <View style={styles.header}>
-        <Text style={styles.headerTitle}>Profile</Text>
-      </View>
-
-      <ScrollView contentContainerStyle={{ paddingBottom: 120 }}>
-        {/* AVATAR SECTION */}
-        <View style={styles.avatarSection}>
-          <TouchableOpacity onPress={pickAndUploadImage} disabled={uploading}>
-            <View style={styles.avatarWrapper}>
-              {uploading ? (
-                <ActivityIndicator size="large" color="#fff" />
-=======
   if (!user) {
     return (
       <View style={[styles.container, styles.centerContent]}>
@@ -224,51 +179,19 @@ export default function ProfileScreen() {
                 <View style={styles.loadingAvatar}>
                   <ActivityIndicator size="large" color="#3B82F6" />
                 </View>
->>>>>>> 9527ca4677aeadf4909e8213e5184278a9bf0dad
               ) : profile?.photoURL ? (
                 <Image
                   source={{ uri: profile.photoURL }}
                   style={styles.avatarImage}
                 />
               ) : (
-<<<<<<< HEAD
-                <View style={styles.avatarFallback}>
-                  <Text style={styles.avatarInitial}>
-                    {profile?.name?.[0]?.toUpperCase() ||
-                      user?.email?.[0]?.toUpperCase() ||
-                      "U"}
-=======
                 <View style={styles.avatarPlaceholder}>
                   <Text style={styles.avatarInitial}>
                     {profile?.name?.[0]?.toUpperCase() || "U"}
->>>>>>> 9527ca4677aeadf4909e8213e5184278a9bf0dad
                   </Text>
                 </View>
               )}
             </View>
-<<<<<<< HEAD
-          </TouchableOpacity>
-
-          <Text style={styles.profileName}>{profile?.name || "User"}</Text>
-          <Text style={styles.profileEmail}>{user?.email}</Text>
-        </View>
-
-        {/* INFO CARD */}
-        <View style={styles.infoCard}>
-          <Text style={styles.infoTitle}>Personal Info</Text>
-
-          {loading ? (
-            <Text style={{ color: "#aaa" }}>Loading...</Text>
-          ) : (
-            <>
-              <InfoRow label="Nama" value={profile?.name || "-"} />
-              <InfoRow label="Alamat" value={profile?.address || "-"} />
-              <InfoRow label="Tipe Motor" value={profile?.bikeType || "-"} />
-              <InfoRow label="Gol. Darah" value={profile?.bloodType || "-"} />
-              <InfoRow
-                label="No. Darurat"
-                value={profile?.emergencyPhone || "-"}
-=======
             <View style={styles.cameraBadge}>
               <Ionicons name="camera" size={18} color="#0F172A" />
             </View>
@@ -316,27 +239,12 @@ export default function ProfileScreen() {
                 label="No. Darurat"
                 value={profile?.emergencyPhone || "-"}
                 icon="call-outline"
->>>>>>> 9527ca4677aeadf4909e8213e5184278a9bf0dad
               />
             </>
           )}
         </View>
 
         {/* BUTTONS */}
-<<<<<<< HEAD
-        <View style={styles.btnGroup}>
-          <TouchableOpacity
-            style={styles.editBtn}
-            onPress={() => router.push("/editprofile")}
-          >
-            <Text style={styles.btnText}>Edit Profile</Text>
-          </TouchableOpacity>
-
-          <TouchableOpacity style={styles.logoutBtn} onPress={handleLogout}>
-            <Text style={styles.btnText}>Logout</Text>
-          </TouchableOpacity>
-        </View>
-=======
         <View style={styles.actionContainer}>
           {/* Primary Button */}
           <PrimaryButton
@@ -350,92 +258,11 @@ export default function ProfileScreen() {
         </View>
 
         <Text style={styles.versionText}>v1.0.0 PrimeLean App</Text>
->>>>>>> 9527ca4677aeadf4909e8213e5184278a9bf0dad
       </ScrollView>
     </View>
   );
 }
 
-<<<<<<< HEAD
-const InfoRow = ({ label, value }: any) => (
-  <View style={styles.row}>
-    <Text style={styles.rowLabel}>{label}</Text>
-    <Text style={styles.rowValue}>{value}</Text>
-  </View>
-);
-
-const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: "#0F172A" },
-
-  header: {
-    paddingTop: 65,
-    paddingBottom: 30,
-    paddingHorizontal: 24,
-    backgroundColor: "rgba(15, 23, 42, 0.6)",
-    borderBottomWidth: 0.5,
-    borderColor: "rgba(255,255,255,0.1)",
-  },
-  headerTitle: {
-    color: "#fff",
-    fontSize: 26,
-    fontWeight: "700",
-  },
-
-  avatarSection: {
-    alignItems: "center",
-    marginTop: 30,
-  },
-  avatarWrapper: {
-    width: 140,
-    height: 140,
-    borderRadius: 80,
-    overflow: "hidden",
-    backgroundColor: "#1E293B",
-    borderWidth: 3,
-    borderColor: "#3B82F6",
-    elevation: 20,
-    shadowOpacity: 0.4,
-    shadowColor: "#3B82F6",
-  },
-  avatarImage: { width: "100%", height: "100%" },
-  avatarFallback: {
-    flex: 1,
-    justifyContent: "center",
-    alignItems: "center",
-  },
-  avatarInitial: {
-    fontSize: 50,
-    fontWeight: "bold",
-    color: "#fff",
-  },
-
-  profileName: {
-    marginTop: 16,
-    fontSize: 26,
-    color: "#fff",
-    fontWeight: "700",
-  },
-  profileEmail: {
-    color: "#94A3B8",
-    fontSize: 15,
-    marginTop: 6,
-  },
-
-  infoCard: {
-    marginTop: 40,
-    marginHorizontal: 24,
-    backgroundColor: "rgba(255,255,255,0.06)",
-    padding: 22,
-    borderRadius: 20,
-    borderWidth: 1,
-    borderColor: "rgba(255,255,255,0.1)",
-  },
-  infoTitle: {
-    fontSize: 20,
-    color: "#fff",
-    fontWeight: "700",
-    marginBottom: 16,
-=======
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: "#0F172A" },
   centerContent: { justifyContent: "center", alignItems: "center" },
@@ -487,16 +314,9 @@ const styles = StyleSheet.create({
     fontSize: 24,
     fontWeight: "700",
     marginBottom: 4,
->>>>>>> 9527ca4677aeadf4909e8213e5184278a9bf0dad
   },
   emailText: { color: "#64748B", fontSize: 14 },
 
-<<<<<<< HEAD
-  row: {
-    paddingVertical: 12,
-    flexDirection: "row",
-    justifyContent: "space-between",
-=======
   cardContainer: {
     marginHorizontal: 20,
     backgroundColor: "#1E293B",
@@ -517,37 +337,10 @@ const styles = StyleSheet.create({
     backgroundColor: "#334155",
     marginVertical: 12,
     marginLeft: 48,
->>>>>>> 9527ca4677aeadf4909e8213e5184278a9bf0dad
   },
   rowLabel: { color: "#94A3B8", fontSize: 16 },
   rowValue: { color: "#fff", fontSize: 16, fontWeight: "600" },
 
-<<<<<<< HEAD
-  btnGroup: {
-    marginTop: 40,
-    alignItems: "center",
-    gap: 16,
-  },
-  editBtn: {
-    width: "85%",
-    paddingVertical: 16,
-    backgroundColor: "#3B82F6",
-    borderRadius: 16,
-    alignItems: "center",
-  },
-  logoutBtn: {
-    width: "85%",
-    paddingVertical: 16,
-    backgroundColor: "#EF4444",
-    borderRadius: 16,
-    alignItems: "center",
-  },
-  btnText: {
-    color: "#fff",
-    fontWeight: "700",
-    fontSize: 16,
-  },
-=======
   infoRowContainer: { flexDirection: "row", alignItems: "center" },
   iconCircle: {
     width: 36,
@@ -571,5 +364,4 @@ const styles = StyleSheet.create({
     fontSize: 12,
     marginBottom: 40,
   },
->>>>>>> 9527ca4677aeadf4909e8213e5184278a9bf0dad
 });
