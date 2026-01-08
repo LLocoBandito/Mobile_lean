@@ -4,14 +4,17 @@ import { doc, getDoc } from "firebase/firestore";
 import React, { useEffect, useMemo, useState } from "react";
 import {
   ActivityIndicator,
+  Dimensions,
   ScrollView,
   StyleSheet,
   Text,
   TouchableOpacity,
   View,
 } from "react-native";
-import MapView, { Marker, Polyline } from "react-native-maps";
+import { WebView } from "react-native-webview";
 import { db } from "../utils/firebaseConfig";
+
+const { width: SCREEN_WIDTH } = Dimensions.get("window");
 
 type RootStackParamList = {
   DetailScreen: { id: string };
@@ -20,6 +23,57 @@ type RootStackParamList = {
 
 type DetailRouteProp = RouteProp<RootStackParamList, "DetailScreen">;
 
+/* ===================== LEAFLET HTML ===================== */
+const getLeafletHtml = (path: any[]) => {
+  const first =
+    path.length > 0 ? path[0] : { latitude: -8.65, longitude: 115.22 };
+  const last = path.length > 0 ? path[path.length - 1] : first;
+
+  const polyline = JSON.stringify(path.map((p) => [p.latitude, p.longitude]));
+
+  return `
+  <!DOCTYPE html>
+  <html>
+    <head>
+      <meta charset="utf-8" />
+      <meta name="viewport" content="width=device-width, initial-scale=1.0">
+      <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
+      <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+      <style>
+        html, body { margin:0; padding:0; background:#0F172A; }
+        #map { width:100vw; height:100vh; }
+        .leaflet-tile {
+          filter: brightness(0.6) invert(1) contrast(3) hue-rotate(200deg);
+        }
+      </style>
+    </head>
+    <body>
+      <div id="map"></div>
+      <script>
+        const map = L.map('map', { zoomControl:false })
+          .setView([${first.latitude}, ${first.longitude}], 15);
+
+        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png')
+          .addTo(map);
+
+        const poly = L.polyline(${polyline}, {
+          color:'#3B82F6',
+          weight:5
+        }).addTo(map);
+
+        L.circleMarker(
+          [${last.latitude}, ${last.longitude}],
+          { radius:7, color:'#EF4444', fillOpacity:1 }
+        ).addTo(map);
+
+        map.fitBounds(poly.getBounds(), { padding:[20,20] });
+      </script>
+    </body>
+  </html>
+  `;
+};
+
+/* ===================== SCREEN ===================== */
 export default function DetailScreen() {
   const route = useRoute<DetailRouteProp>();
   const navigation = useNavigation();
@@ -29,266 +83,199 @@ export default function DetailScreen() {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    const fetchSession = async () => {
+    const fetch = async () => {
       try {
-        const docRef = doc(db, "monitoring_sessions", id);
-        const docSnap = await getDoc(docRef);
-        if (docSnap.exists()) {
-          setSession({ id: docSnap.id, ...docSnap.data() });
-        } else {
-          console.warn("Data tidak ditemukan di Firestore");
+        const ref = doc(db, "monitoring_sessions", id);
+        const snap = await getDoc(ref);
+        if (snap.exists()) {
+          setSession({ id: snap.id, ...snap.data() });
         }
-      } catch (err) {
-        console.error("Gagal ambil data:", err);
+      } catch (e) {
+        console.error("Firestore error:", e);
       } finally {
         setLoading(false);
       }
     };
-
-    fetchSession();
+    fetch();
   }, [id]);
 
-  // Hitung rata-rata roll kanan & kiri dari gpsPath
-  const averages = useMemo(() => {
-    const path = session?.gpsPath || [];
-    if (path.length === 0) {
-      return { avgRight: 0, avgLeft: 0 };
-    }
+  const path = session?.path || [];
 
-    let sumRight = 0;
-    let sumLeft = 0;
-    let countRight = 0;
-    let countLeft = 0;
+  /* ===================== AVG ROLL ===================== */
+  const averages = useMemo(() => {
+    if (!path.length) return { avgRight: "0", avgLeft: "0" };
+
+    let r = 0,
+      l = 0,
+      cr = 0,
+      cl = 0;
 
     path.forEach((p: any) => {
-      const roll = p.roll || 0;
-      if (roll > 0) {
-        sumRight += roll;
-        countRight++;
-      } else if (roll < 0) {
-        sumLeft += Math.abs(roll);
-        countLeft++;
+      if (p.roll > 0) {
+        r += p.roll;
+        cr++;
+      } else if (p.roll < 0) {
+        l += Math.abs(p.roll);
+        cl++;
       }
     });
 
     return {
-      avgRight: countRight > 0 ? (sumRight / countRight).toFixed(1) : 0,
-      avgLeft: countLeft > 0 ? (sumLeft / countLeft).toFixed(1) : 0,
+      avgRight: cr ? (r / cr).toFixed(1) : "0",
+      avgLeft: cl ? (l / cl).toFixed(1) : "0",
     };
-  }, [session]);
+  }, [path]);
 
   if (loading) {
     return (
-      <View style={styles.loadingContainer}>
+      <View style={styles.loading}>
         <ActivityIndicator size="large" color="#3B82F6" />
         <Text style={{ color: "#E5E7EB", marginTop: 10 }}>
-          Memuat detail sesi...
+          Memuat detail...
         </Text>
       </View>
     );
   }
 
-  if (!session) {
-    return (
-      <View style={styles.loadingContainer}>
-        <Text style={{ color: "#E5E7EB" }}>Data tidak ditemukan</Text>
-      </View>
-    );
-  }
-
-  const path = session.gpsPath || [];
-
   return (
     <View style={styles.container}>
-      {/* Header dengan tombol Back */}
-      <View style={styles.headerContainer}>
-        <TouchableOpacity
-          onPress={() => navigation.goBack()}
-          style={styles.backButton}
-        >
+      {/* HEADER */}
+      <View style={styles.headerRow}>
+        <TouchableOpacity onPress={() => navigation.goBack()}>
           <Ionicons name="arrow-back" size={28} color="#F9FAFB" />
         </TouchableOpacity>
-        <Text style={styles.header}>{session.sessionName}</Text>
+        <Text style={styles.header} numberOfLines={1}>
+          {session?.sessionName || "Detail Perjalanan"}
+        </Text>
       </View>
 
       <ScrollView showsVerticalScrollIndicator={false}>
-        {/* Peta */}
+        {/* MAP */}
         <View style={styles.mapContainer}>
-          <MapView
-            style={{ flex: 1 }}
-            initialRegion={{
-              latitude: path[0]?.latitude || -8.65,
-              longitude: path[0]?.longitude || 115.22,
-              latitudeDelta: 0.02,
-              longitudeDelta: 0.02,
-            }}
-          >
-            <Polyline
-              coordinates={path}
-              strokeWidth={5}
-              strokeColor="#3B82F6"
-            />
-            {path.length > 0 && (
-              <>
-                <Marker coordinate={path[0]} title="Start" pinColor="green" />
-                <Marker
-                  coordinate={path[path.length - 1]}
-                  title="Finish"
-                  pinColor="red"
-                />
-              </>
-            )}
-          </MapView>
+          <WebView
+            key={`map-${id}-${path.length}`}
+            source={{ html: getLeafletHtml(path) }}
+            style={{ flex: 1, backgroundColor: "#0F172A" }}
+            originWhitelist={["*"]}
+            javaScriptEnabled
+            domStorageEnabled
+          />
         </View>
 
-        {/* Ringkasan */}
-        <View style={styles.summaryCard}>
-          <Text style={styles.summaryTitle}>Ringkasan Sesi</Text>
+        {/* SUMMARY */}
+        <View style={styles.card}>
+          <Text style={styles.cardTitle}>Ringkasan Sesi</Text>
 
-          <View style={styles.summaryRow}>
-            <Ionicons name="speedometer-outline" size={18} color="#10B981" />
-            <Text style={styles.summaryText}>Total Titik: {path.length}</Text>
-          </View>
+          <Text style={styles.cardText}>
+            ⚡ 0–60 km/h:{" "}
+            {session?.accel_0_60 != null
+              ? `${session.accel_0_60.toFixed(2)} s`
+              : "-"}
+          </Text>
 
-          <View style={styles.summaryRow}>
-            <Ionicons
-              name="swap-horizontal-outline"
-              size={18}
-              color="#3B82F6"
-            />
-            <Text style={styles.summaryText}>
-              Max Roll Kanan: {session.leanData?.maxRollRight ?? 0}°
-            </Text>
-          </View>
+          <Text style={styles.cardText}>
+            ⚡ 60–100 km/h:{" "}
+            {session?.accel_60_100 != null
+              ? `${session.accel_60_100.toFixed(2)} s`
+              : "-"}
+          </Text>
 
-          <View style={styles.summaryRow}>
-            <Ionicons
-              name="swap-horizontal-outline"
-              size={18}
-              color="#EF4444"
-            />
-            <Text style={styles.summaryText}>
-              Max Roll Kiri: {session.leanData?.maxRollLeft ?? 0}°
-            </Text>
-          </View>
+          <Text style={styles.cardText}>
+            ⚡ 100–150 km/h:{" "}
+            {session?.accel_100_150 != null
+              ? `${session.accel_100_150.toFixed(2)} s`
+              : "-"}
+          </Text>
 
-          <View style={styles.summaryRow}>
-            <Ionicons name="trending-up-outline" size={18} color="#8B5CF6" />
-            <Text style={styles.summaryText}>
-              Avg Roll Kanan: {averages.avgRight}°
-            </Text>
-          </View>
-
-          <View style={styles.summaryRow}>
-            <Ionicons name="trending-down-outline" size={18} color="#EC4899" />
-            <Text style={styles.summaryText}>
-              Avg Roll Kiri: {averages.avgLeft}°
-            </Text>
-          </View>
+          <Text style={styles.cardText}>
+            📐 Avg Roll Kanan: {averages.avgRight}°
+          </Text>
+          <Text style={styles.cardText}>
+            📐 Avg Roll Kiri: {averages.avgLeft}°
+          </Text>
         </View>
 
-        {/* Tabel Data GPS */}
-        <View style={styles.tableContainer}>
-          <Text style={styles.tableTitle}>Data Kemiringan per Titik GPS</Text>
-          {path.map((p: any, i: number) => {
-            const roll = p.roll || 0;
-            const rollKanan = roll > 0 ? roll.toFixed(1) : 0;
-            const rollKiri = roll < 0 ? Math.abs(roll).toFixed(1) : 0;
+        {/* LOG */}
+        <View style={styles.card}>
+          <Text style={styles.cardTitle}>Log Perjalanan ({path.length})</Text>
 
-            return (
-              <View key={i} style={styles.tableRow}>
-                <Text style={styles.tableIndex}>{i + 1}</Text>
-                <View style={{ flex: 1 }}>
-                  <Text style={styles.tableText}>
-                    Lat: {p.latitude.toFixed(5)}, Lng: {p.longitude.toFixed(5)}
-                  </Text>
-                  <Text style={styles.tableSubText}>
-                    Roll Kanan: {rollKanan}° | Roll Kiri: {rollKiri}° | Pitch:{" "}
-                    {p.pitch?.toFixed(1) ?? 0}°
-                  </Text>
-                </View>
-                <Text style={styles.timeText}>
-                  {new Date(p.timestamp).toLocaleTimeString()}
+          {path.map((p: any, i: number) => (
+            <View key={i} style={styles.row}>
+              <Text style={styles.idx}>{i + 1}</Text>
+              <View style={{ flex: 1 }}>
+                <Text style={styles.rowText}>{p.speed || 0} km/h</Text>
+                <Text style={styles.sub}>
+                  R:{p.roll > 0 ? p.roll : 0}° | L:
+                  {p.roll < 0 ? Math.abs(p.roll) : 0}° | P:
+                  {p.pitch?.toFixed(1)}°
                 </Text>
               </View>
-            );
-          })}
+              <Text style={styles.time}>
+                {new Date(p.timestamp).toLocaleTimeString()}
+              </Text>
+            </View>
+          ))}
         </View>
       </ScrollView>
     </View>
   );
 }
 
+/* ===================== STYLES ===================== */
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: "#0F172A" },
-  headerContainer: {
-    flexDirection: "row",
-    alignItems: "center",
-    paddingHorizontal: 20,
-    paddingTop: 60,
-    paddingBottom: 15,
-  },
-  backButton: {
-    marginRight: 15,
-    padding: 5,
-  },
-  header: {
-    color: "#F9FAFB",
-    fontSize: 24,
-    fontWeight: "700",
-    flex: 1,
-  },
-  loadingContainer: {
+  loading: {
     flex: 1,
     justifyContent: "center",
     alignItems: "center",
     backgroundColor: "#0F172A",
   },
-  mapContainer: {
-    height: 280,
-    borderRadius: 16,
-    overflow: "hidden",
-    marginHorizontal: 20,
-    marginBottom: 20,
-    elevation: 5,
+  headerRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    padding: 20,
+    paddingTop: 50,
   },
-  summaryCard: {
-    backgroundColor: "#1E293B",
-    marginHorizontal: 20,
-    padding: 18,
-    borderRadius: 16,
-    marginBottom: 20,
-  },
-  summaryTitle: {
+  header: {
     color: "#F9FAFB",
-    fontSize: 19,
-    fontWeight: "600",
-    marginBottom: 12,
+    fontSize: 20,
+    fontWeight: "700",
+    marginLeft: 15,
+    flex: 1,
   },
-  summaryRow: { flexDirection: "row", alignItems: "center", marginVertical: 6 },
-  summaryText: { color: "#E5E7EB", marginLeft: 10, fontSize: 15 },
-  tableContainer: {
-    backgroundColor: "#1E293B",
+  mapContainer: {
+    height: 320,
     marginHorizontal: 20,
-    padding: 18,
-    borderRadius: 16,
-    marginBottom: 30,
+    borderRadius: 20,
+    overflow: "hidden",
+    borderWidth: 1,
+    borderColor: "#334155",
   },
-  tableTitle: {
+  card: {
+    backgroundColor: "#1E293B",
+    margin: 20,
+    padding: 20,
+    borderRadius: 20,
+  },
+  cardTitle: {
     color: "#F9FAFB",
     fontSize: 18,
     fontWeight: "600",
-    marginBottom: 12,
+    marginBottom: 10,
   },
-  tableRow: {
+  cardText: {
+    color: "#E5E7EB",
+    fontSize: 15,
+    marginVertical: 4,
+  },
+  row: {
     flexDirection: "row",
-    alignItems: "center",
-    paddingVertical: 10,
+    paddingVertical: 12,
     borderBottomWidth: 1,
     borderColor: "#334155",
   },
-  tableIndex: { color: "#9CA3AF", width: 30, fontSize: 14 },
-  tableText: { color: "#E5E7EB", fontSize: 14 },
-  tableSubText: { color: "#94A3B8", fontSize: 12.5, marginTop: 2 },
-  timeText: { color: "#94A3B8", fontSize: 12 },
+  idx: { color: "#94A3B8", width: 30 },
+  rowText: { color: "#E5E7EB", fontWeight: "600" },
+  sub: { color: "#94A3B8", fontSize: 12 },
+  time: { color: "#64748B", fontSize: 12 },
 });

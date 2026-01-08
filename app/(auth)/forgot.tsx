@@ -1,9 +1,14 @@
 import { Ionicons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
 import React, { useState } from "react";
+<<<<<<< HEAD
 // PERBAIKAN 1: Tambahkan KeyboardAvoidingView dan Platform di sini
 import { Alert, KeyboardAvoidingView, Platform, StyleSheet, Text, TouchableOpacity, View } from "react-native";
 import AuthButton from "../../components/PrimaryButton";
+=======
+import { Alert, StyleSheet, Text, TouchableOpacity, View } from "react-native";
+import PrimaryButton from "../../components/PrimaryButton";
+>>>>>>> f94758a96585b86faecefefc059eb489dc7f8ee8
 import AuthInput from "../../components/inputfield";
 import { handlePasswordReset } from "../../utils/login_handler";
 
@@ -61,13 +66,11 @@ export default function ForgotPasswordScreen() {
           Masukkan email kamu dan kami akan mengirimkan link reset password.
         </Text>
 
-        <AuthInput
-          label="Email"
-          placeholder="example@mail.com"
-          keyboardType="email-address"
-          value={email}
-          onChangeText={setEmail}
-        />
+      <PrimaryButton
+        text={loading ? "Loading..." : "Send Reset Code"}
+        onPress={handleReset}
+        loading={loading}
+      />
 
         <View style={{ marginTop: 20 }}>
           {/* PERBAIKAN 2: Jika eror 'title' tetap muncul, ganti 'title' menjadi 
@@ -132,7 +135,7 @@ const styles = StyleSheet.create({
     lineHeight: 20,
   },
   backText: {
-    color: "#3B82F6",
+    color: "#ffffffff",
     textAlign: "center",
     marginTop: 25,
     fontSize: 15,

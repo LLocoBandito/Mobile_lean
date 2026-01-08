@@ -16,15 +16,61 @@ import {
   TouchableOpacity,
   View
 } from "react-native";
+<<<<<<< HEAD
 import MapView, { Polyline, PROVIDER_GOOGLE } from "react-native-maps";
 import { SafeAreaView } from "react-native-safe-area-context";
 import Svg, { Path } from "react-native-svg";
+=======
+import { SafeAreaView } from "react-native-safe-area-context";
+import Svg, { Path } from "react-native-svg";
+import { WebView } from "react-native-webview";
+>>>>>>> f94758a96585b86faecefefc059eb489dc7f8ee8
 
 import MonitoringCard from "../../components/MonitoringCard";
 import { auth, db } from "../../utils/firebaseConfig";
 
 const { width: SCREEN_WIDTH } = Dimensions.get("window");
+const getLeafletHtml = (points: LocationPoint[]) => {
+  const lastPoint =
+    points.length > 0
+      ? points[points.length - 1]
+      : { latitude: -8.65, longitude: 115.21 };
+  const pathData = JSON.stringify(points.map((p) => [p.latitude, p.longitude]));
 
+  return `
+    <!DOCTYPE html>
+    <html>
+      <head>
+        <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+        <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+        <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+        <style>
+          #map { height: 100vh; width: 100vw; margin: 0; padding: 0; background: #0F172A; }
+          .leaflet-control-attribution { display: none; }
+        </style>
+      </head>
+      <body>
+        <div id="map"></div>
+        <script>
+          var map = L.map('map', { zoomControl: false }).setView([${lastPoint.latitude}, ${lastPoint.longitude}], 15);
+          
+          L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+            maxZoom: 19,
+          }).addTo(map);
+
+          var path = L.polyline(${pathData}, {color: '#3B82F6', weight: 5}).addTo(map);
+          
+          if (${points.length} > 0) {
+            var marker = L.circleMarker([${lastPoint.latitude}, ${lastPoint.longitude}], {
+              radius: 8, fillOpacity: 1, color: 'white', fillColor: '#EF4444', weight: 2
+            }).addTo(map);
+            map.panTo([${lastPoint.latitude}, ${lastPoint.longitude}]);
+          }
+        </script>
+      </body>
+    </html>
+  `;
+};
 // --- KONSTANTA ---
 const MAX_ROLL_ANGLE = 50;
 const DANGER_SPEED_THRESHOLD = 120; // km/h
@@ -78,10 +124,14 @@ export default function Home() {
   const [displayRoll, setDisplayRoll] = useState(0);
   const [currentSpeed, setCurrentSpeed] = useState(0);
   const [mapPageIndex, setMapPageIndex] = useState(0);
+<<<<<<< HEAD
   
   // State Baru untuk menangani eror tombol
   const [activeButton, setActiveButton] = useState<string | null>(null);
   const [paused, setPaused] = useState(false);
+=======
+  const accelStageRef = useRef<0 | 60 | 100 | 150>(0);
+>>>>>>> f94758a96585b86faecefefc059eb489dc7f8ee8
 
   const [isSpeedBeeping, setIsSpeedBeeping] = useState(false);
   const [isRollBeeping, setIsRollBeeping] = useState(false);
@@ -99,6 +149,11 @@ export default function Home() {
   const rotateAnim = useRef(new Animated.Value(0)).current;
   const lastSpeedRef = useRef(0);
   const accelStartTimeRef = useRef<number | null>(null);
+  const completedStagesRef = useRef({
+    zeroTo60: false,
+    sixtyTo100: false,
+    hundredTo150: false,
+  });
 
   const [subscription, setSubscription] = useState<any>(null);
   const [locationWatcher, setLocationWatcher] = useState<Location.LocationSubscription | null>(null);
@@ -107,11 +162,19 @@ export default function Home() {
 
   const isDark = colorScheme === "dark";
   const colors = {
+<<<<<<< HEAD
     BG_PRIMARY: isDark ? "#0F172A" : "#F8FAFC",
     BG_CARD: isDark ? "rgba(30, 41, 59, 0.95)" : "#FFFFFF",
     TEXT_PRIMARY: isDark ? "#E2E8F0" : "#1E293B",
     TEXT_SECONDARY: isDark ? "#94A3B8" : "#64748B",
     BORDER: isDark ? "#475569" : "#CBD5E1",
+=======
+    BG_PRIMARY: isDark ? "#0F172A" : "#FFFFFF", // Background utama: putih murni di light mode
+    BG_CARD: isDark ? "rgba(30, 41, 59, 0.95)" : "#FFFFFF", // Card: putih murni di light mode
+    TEXT_PRIMARY: isDark ? "#E2E8F0" : "#000000", // Teks utama: hitam di light mode
+    TEXT_SECONDARY: isDark ? "#94A3B8" : "#444444", // Teks sekunder: abu-abu gelap
+    BORDER: isDark ? "#475569" : "#E0E0E0", // Border sangat terang di light
+>>>>>>> f94758a96585b86faecefefc059eb489dc7f8ee8
     ACCENT_SAFE: "#10B981",
     ACCENT_WARNING: "#F59E0B",
     ACCENT_DANGER: "#EF4444",
@@ -149,20 +212,56 @@ export default function Home() {
   };
 
   const stopBeepSound = async () => {
+<<<<<<< HEAD
     if (beepSoundRef.current) {
       await beepSoundRef.current.stopAsync();
+=======
+    if (!beepSoundRef.current) return;
+
+    try {
+      const status = await beepSoundRef.current.getStatusAsync();
+      if (status && "isLoaded" in status && status.isLoaded) {
+        await beepSoundRef.current.stopAsync();
+        await beepSoundRef.current.setPositionAsync(0);
+      }
+    } catch (error) {
+      console.warn("Gagal menghentikan suara:", error);
+>>>>>>> f94758a96585b86faecefefc059eb489dc7f8ee8
     }
   };
 
   const playBeepSound = async () => {
-    if (beepSoundRef.current) {
+    // 1. Pastikan ref tidak null
+    if (!beepSoundRef.current) return;
+
+    try {
       const status = await beepSoundRef.current.getStatusAsync();
-      if (status.isLoaded && !status.isPlaying) {
-        await beepSoundRef.current.playAsync();
+
+      // 2. Cek apakah properti 'isLoaded' ada dan bernilai true
+      if (status && "isLoaded" in status && status.isLoaded) {
+        // 3. Hanya mainkan jika tidak sedang bunyi
+        if (!status.isPlaying) {
+          await beepSoundRef.current.playAsync();
+        }
       }
+    } catch (error) {
+      // Menangkap error jika status dipanggil saat sound sedang unload
+      console.warn("Gagal memainkan suara (belum dimuat):", error);
+    }
+  };
+<<<<<<< HEAD
+
+=======
+  // Membongkar audio saat unmount
+  const unloadBeepSound = async () => {
+    if (beepSoundRef.current) {
+      await beepSoundRef.current.unloadAsync();
+      beepSoundRef.current = null;
     }
   };
 
+  // Panggil saat komponen di-mount
+>>>>>>> f94758a96585b86faecefefc059eb489dc7f8ee8
   useEffect(() => {
     loadBeepSound();
     return () => { if (beepSoundRef.current) beepSoundRef.current.unloadAsync(); };
@@ -190,11 +289,22 @@ export default function Home() {
     const { status: permStatus } = await Location.requestForegroundPermissionsAsync();
     if (permStatus !== "granted") return;
 
+<<<<<<< HEAD
     const watcher = await Location.watchPositionAsync(
       { accuracy: Location.Accuracy.BestForNavigation, timeInterval: 1000, distanceInterval: 3 },
+=======
+    // 1. Location Watcher
+    const watcher = await Location.watchPositionAsync(
+      {
+        accuracy: Location.Accuracy.BestForNavigation,
+        timeInterval: 500, // Update lebih cepat (500ms) untuk akurasi timer
+        distanceInterval: 0, // Set 0 agar update terus meski bergerak sedikit
+      },
+>>>>>>> f94758a96585b86faecefefc059eb489dc7f8ee8
       (loc) => {
         if (paused) return;
         const speed = loc.coords.speed ? Math.round(loc.coords.speed * 3.6) : 0;
+<<<<<<< HEAD
         setCurrentSpeed(speed);
         lastSpeedRef.current = speed;
         Animated.timing(speedAnim, { toValue: Math.min(speed, 160), duration: 400, useNativeDriver: false }).start();
@@ -207,16 +317,142 @@ export default function Home() {
           pitch: pitchRef.current,
           speed
         }]);
+=======
+        // Ambil speed sebelumnya DARI REF sebelum diupdate
+        const prevSpeed = lastSpeedRef.current;
+
+        setCurrentSpeed(speed);
+
+        // Animasi Speedometer
+        Animated.timing(speedAnim, {
+          toValue: Math.min(speed, 160),
+          duration: 400,
+          useNativeDriver: false,
+        }).start();
+
+        // === LOGIKA PENGHITUNGAN AKSELERASI DISINI ===
+        // Kita pakai Ref completedStagesRef agar tidak terkena stale closure
+        if (status === "Connected" || true) {
+          // Force true logic check inside watcher context
+          const now = Date.now();
+
+          // A. DETEKSI START (0 km/h -> Bergerak)
+          // Jika speed turun ke 0/1, reset timer start (mobil berhenti)
+          if (speed <= 1 && !completedStagesRef.current.zeroTo60) {
+            accelStartTimeRef.current = null;
+          }
+          // Start Timer saat speed > 2 km/h
+          else if (
+            speed > 2 &&
+            !accelStartTimeRef.current &&
+            !completedStagesRef.current.zeroTo60
+          ) {
+            accelStartTimeRef.current = now;
+          }
+
+          // B. LOGIKA 0 - 60 KM/H
+          if (
+            prevSpeed < 60 &&
+            speed >= 60 &&
+            !completedStagesRef.current.zeroTo60
+          ) {
+            const startTime = accelStartTimeRef.current || now; // Fallback safety
+            const duration = (now - startTime) / 1000;
+
+            // 1. Langsung update State agar muncul di layar
+            setAccelTimes((prev) => ({ ...prev, zeroTo60: duration }));
+
+            // 2. Tandai selesai di Ref
+            completedStagesRef.current.zeroTo60 = true;
+
+            // 3. Reset timer untuk start hitungan 60-100 berikutnya
+            accelStartTimeRef.current = now;
+
+            // 4. Beri getaran SUKSES agar user tahu sudah tercatat tanpa melihat layar
+            Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+          }
+
+          // C. LOGIKA 60 - 100 KM/H
+          else if (
+            prevSpeed < 100 &&
+            speed >= 100 &&
+            completedStagesRef.current.zeroTo60 &&
+            !completedStagesRef.current.sixtyTo100
+          ) {
+            const startTime = accelStartTimeRef.current || now;
+            const duration = (now - startTime) / 1000;
+
+            setAccelTimes((prev) => ({ ...prev, sixtyTo100: duration }));
+            completedStagesRef.current.sixtyTo100 = true;
+            accelStartTimeRef.current = now; // Reset untuk 100-150
+            Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+          }
+
+          // D. LOGIKA 100 - 150 KM/H
+          else if (
+            prevSpeed < 150 &&
+            speed >= 150 &&
+            completedStagesRef.current.sixtyTo100 &&
+            !completedStagesRef.current.hundredTo150
+          ) {
+            const startTime = accelStartTimeRef.current || now;
+            const duration = (now - startTime) / 1000;
+
+            setAccelTimes((prev) => ({ ...prev, hundredTo150: duration }));
+            completedStagesRef.current.hundredTo150 = true;
+            accelStartTimeRef.current = null; // Selesai
+            Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+          }
+        }
+
+        // Update Ref Speed Terakhir
+        lastSpeedRef.current = speed;
+
+        // Simpan titik lokasi
+        setLocationPoints((prev) => [
+          ...prev,
+          {
+            latitude: loc.coords.latitude,
+            longitude: loc.coords.longitude,
+            timestamp: new Date().toISOString(),
+            roll: rollRef.current,
+            pitch: pitchRef.current,
+            speed,
+          },
+        ]);
+>>>>>>> f94758a96585b86faecefefc059eb489dc7f8ee8
       }
     );
     setLocationWatcher(watcher);
 
+<<<<<<< HEAD
     Accelerometer.setUpdateInterval(100);
     const sub = Accelerometer.addListener(({ x, y, z }) => {
       if (paused) return;
       let rollRad = orientationMode === "Portrait" ? Math.atan2(-x, z) : Math.atan2(y, z);
       let rollDeg = (rollRad * 180) / Math.PI;
       const clampedRoll = Math.max(-MAX_ROLL_ANGLE, Math.min(MAX_ROLL_ANGLE, rollDeg));
+=======
+    // 2. Accelerometer Watcher (Tetap sama seperti kode Anda)
+    Accelerometer.setUpdateInterval(100);
+    const sub = Accelerometer.addListener(({ x, y, z }) => {
+      // ... (kode accelerometer Anda tetap sama)
+      let rollRad: number, pitchRad: number;
+      if (orientationMode === "Portrait") {
+        rollRad = Math.atan2(-x, z);
+        pitchRad = Math.atan2(y, Math.sqrt(x * x + z * z));
+      } else {
+        rollRad = Math.atan2(y, z);
+        pitchRad = Math.atan2(-x, Math.sqrt(y * y + z * z));
+      }
+      const rollDeg = (rollRad * 180) / Math.PI;
+      const pitchDeg = (pitchRad * 180) / Math.PI;
+      const clampedRoll = Math.max(
+        -MAX_ROLL_ANGLE,
+        Math.min(MAX_ROLL_ANGLE, rollDeg)
+      );
+
+>>>>>>> f94758a96585b86faecefefc059eb489dc7f8ee8
       rollRef.current = Math.round(clampedRoll);
       setDisplayRoll(rollRef.current);
       Animated.timing(rotateAnim, { toValue: clampedRoll, duration: 120, useNativeDriver: true }).start();
@@ -225,6 +461,7 @@ export default function Home() {
   };
 
   const startMonitoring = async () => {
+<<<<<<< HEAD
     setLocationPoints([]);
     setPaused(false);
     await activateMonitoring();
@@ -237,6 +474,33 @@ export default function Home() {
     setStatus("Disconnected");
     setCurrentSpeed(0);
     stopBeepSound();
+=======
+    if (status === "Connected") stopMonitoring();
+
+    setLocationPoints([]);
+    setAccelTimes({ zeroTo60: null, sixtyTo100: null, hundredTo150: null });
+
+    // RESET Ref disini
+    accelStartTimeRef.current = null;
+    lastSpeedRef.current = 0;
+    completedStagesRef.current = {
+      zeroTo60: false,
+      sixtyTo100: false,
+      hundredTo150: false,
+    };
+
+    await activateMonitoring();
+    setStatus("Connected");
+  };
+  // Hapus fungsi togglePause
+  /*
+  const togglePause = async () => {
+    if (paused) {
+      // ... logic play
+    } else {
+      // ... logic pause
+    }
+>>>>>>> f94758a96585b86faecefefc059eb489dc7f8ee8
   };
 
   const saveData = async () => {
@@ -339,8 +603,309 @@ export default function Home() {
                     latitudeDelta: 0.01, longitudeDelta: 0.01
                 } : undefined}
             >
+<<<<<<< HEAD
                 {locationPoints.length > 0 && <Polyline coordinates={locationPoints} strokeWidth={5} strokeColor={colors.ACCENT_INFO} />}
             </MapView>
+=======
+              {currentSpeed}
+            </Text>
+            <Text
+              style={{
+                color: colors.ACCENT_INFO,
+                fontSize: 20,
+                fontWeight: "bold",
+              }}
+            >
+              km/h
+            </Text>
+            <View
+              style={[
+                styles.speedBarContainer,
+                { backgroundColor: isDark ? "#1E293B" : "#111111" },
+              ]}
+            >
+              <Animated.View
+                style={[
+                  styles.speedBar,
+                  {
+                    width: speedAnim.interpolate({
+                      inputRange: [0, 160],
+                      outputRange: ["0%", "100%"],
+                    }),
+                    backgroundColor: getSpeedBarColor(),
+                  },
+                ]}
+              />
+            </View>
+          </MonitoringCard>
+
+          {/* Waktu Akselerasi */}
+          <View
+            style={[
+              styles.accelCard,
+              { backgroundColor: colors.BG_CARD, borderColor: colors.BORDER },
+            ]}
+          >
+            <Text
+              style={{
+                ...styles.cardTitle,
+                color: colors.TEXT_PRIMARY,
+                fontSize: 20,
+              }}
+            >
+              Waktu Akselerasi
+            </Text>
+
+            {/* Rows Akselerasi */}
+            <View style={styles.accelRow}>
+              <Text
+                style={[styles.accelLabel, { color: colors.TEXT_SECONDARY }]}
+              >
+                0 → 60 km/h
+              </Text>
+              <Text
+                style={[
+                  styles.accelValue,
+                  {
+                    color: accelTimes.zeroTo60
+                      ? "#10B981"
+                      : colors.TEXT_SECONDARY,
+                  },
+                ]}
+              >
+                {accelTimes.zeroTo60 !== null
+                  ? `${accelTimes.zeroTo60.toFixed(2)}s`
+                  : "-"}
+              </Text>
+            </View>
+            <View style={styles.accelRow}>
+              <Text
+                style={[styles.accelLabel, { color: colors.TEXT_SECONDARY }]}
+              >
+                60 → 100 km/h
+              </Text>
+              <Text
+                style={[
+                  styles.accelValue,
+                  {
+                    color: accelTimes.sixtyTo100
+                      ? "#3B82F6"
+                      : colors.TEXT_SECONDARY,
+                  },
+                ]}
+              >
+                {accelTimes.sixtyTo100 !== null
+                  ? `${accelTimes.sixtyTo100.toFixed(2)}s`
+                  : "-"}
+              </Text>
+            </View>
+            <View style={styles.accelRow}>
+              <Text
+                style={[styles.accelLabel, { color: colors.TEXT_SECONDARY }]}
+              >
+                100 → 150 km/h
+              </Text>
+              <Text
+                style={[
+                  styles.accelValue,
+                  {
+                    color: accelTimes.hundredTo150
+                      ? "#EF4444"
+                      : colors.TEXT_SECONDARY,
+                  },
+                ]}
+              >
+                {accelTimes.hundredTo150 !== null
+                  ? `${accelTimes.hundredTo150.toFixed(2)}s`
+                  : "-"}
+              </Text>
+            </View>
+          </View>
+
+          {/* Horizontal Scroll: Roll + Map */}
+          <ScrollView
+            ref={scrollRef}
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            pagingEnabled
+            style={{ marginVertical: 20 }}
+            onScroll={handleScroll}
+            scrollEventThrottle={200}
+          >
+            {/* Roll (Kemiringan) */}
+            <View
+              style={[
+                styles.rollCard,
+                { backgroundColor: colors.BG_CARD, borderColor: colors.BORDER },
+              ]}
+            >
+              <Text
+                style={{
+                  ...styles.cardTitle,
+                  color: colors.TEXT_PRIMARY,
+                  fontSize: 20,
+                }}
+              >
+                Sudut Kemiringan (Roll)
+              </Text>
+
+              <Svg height="200" width="300">
+                {/* Latar Belakang Arc (Indikator Roll Maks) */}
+                <Path
+                  d={`M${150 - 120} 150 A120 120 0 0 1 ${150 + 120} 150`}
+                  stroke={colors.BORDER}
+                  strokeWidth="10"
+                  fill="none"
+                />
+                {/* Indikator Roll Aktif */}
+                <Path
+                  d={getArcPath(displayRoll)}
+                  stroke={getRollPathColor()}
+                  strokeWidth="10"
+                  fill="none"
+                />
+              </Svg>
+              <Text
+                style={{
+                  ...styles.angleText,
+                  color: getRollPathColor(),
+                  fontSize: 42,
+                }}
+              >
+                {Math.abs(displayRoll)}°
+              </Text>
+              <Animated.View
+                style={[
+                  styles.bikeContainer,
+                  { transform: [{ rotate: rotation }] },
+                ]}
+              >
+                <View
+                  style={[
+                    styles.bike,
+                    {
+                      backgroundColor:
+                        Math.abs(displayRoll) > DANGER_ROLL_THRESHOLD
+                          ? colors.ACCENT_DANGER
+                          : colors.TEXT_PRIMARY,
+                    },
+                  ]}
+                />
+              </Animated.View>
+              <Text
+                style={{
+                  ...styles.statusDirection,
+                  color: colors.TEXT_SECONDARY,
+                  marginTop: 20,
+                  fontSize: 16,
+                }}
+              >
+                {displayRoll === 0
+                  ? "Center"
+                  : displayRoll > 0
+                  ? "Tilting Right"
+                  : "Tilting Left"}
+              </Text>
+              <Text style={{ color: colors.TEXT_SECONDARY, fontSize: 16 }}>
+                Pitch (Mendaki/Menurun): {displayPitch}°
+              </Text>
+            </View>
+
+            {/* Map */}
+            {/* Map */}
+            {/* Map (Leaflet via WebView) */}
+            <View
+              style={[
+                styles.mapCard,
+                { backgroundColor: colors.BG_CARD, borderColor: colors.BORDER },
+              ]}
+            >
+              <Text
+                style={{
+                  ...styles.cardTitle,
+                  color: colors.TEXT_PRIMARY,
+                  fontSize: 20,
+                }}
+              >
+                Peta Perjalanan (Leaflet)
+              </Text>
+
+              <View
+                style={[styles.map, { overflow: "hidden", borderRadius: 12 }]}
+              >
+                <WebView
+                  key={locationPoints.length} // Force re-render saat koordinat bertambah
+                  originWhitelist={["*"]}
+                  source={{ html: getLeafletHtml(locationPoints) }}
+                  style={{ flex: 1, backgroundColor: colors.BG_PRIMARY }}
+                  javaScriptEnabled={true}
+                  domStorageEnabled={true}
+                  scrollEnabled={false} // Agar tidak mengganggu scroll utama aplikasi
+                />
+              </View>
+
+              <Text
+                style={{
+                  color: colors.TEXT_SECONDARY,
+                  textAlign: "center",
+                  marginTop: 12,
+                  fontSize: 16,
+                }}
+              >
+                Titik GPS Terekam: {locationPoints.length}
+              </Text>
+            </View>
+          </ScrollView>
+
+          {/* Indikator Slide */}
+          <PaginationDots
+            count={2}
+            activeIndex={mapPageIndex}
+            colors={colors}
+          />
+
+          {/* Control Buttons (Tombol PAUSE dihilangkan) */}
+          <View style={styles.buttonGrid}>
+            <TouchableOpacity
+              style={[
+                styles.controlBtn,
+                styles.startBtn,
+                { width: 100, height: 100 }, // Sesuaikan ukuran agar tetap rapi
+              ]}
+              onPress={startMonitoring}
+              disabled={status === "Connected"}
+            >
+              <Ionicons name="play-circle" size={40} color="#fff" />
+              <Text style={styles.btnText}>MULAI</Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={[
+                styles.controlBtn,
+                styles.saveBtn,
+                { width: 100, height: 100 },
+              ]}
+              onPress={saveData}
+              disabled={locationPoints.length === 0}
+            >
+              <Ionicons name="cloud-upload" size={40} color="#fff" />
+              <Text style={styles.btnText}>SIMPAN</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={[
+                styles.controlBtn,
+                styles.stopBtn,
+                { width: 100, height: 100 },
+              ]}
+              onPress={stopMonitoring}
+              disabled={
+                status === "Disconnected" && locationPoints.length === 0
+              }
+            >
+              <Ionicons name="stop-circle" size={40} color="#fff" />
+              <Text style={styles.btnText}>STOP</Text>
+            </TouchableOpacity>
+>>>>>>> f94758a96585b86faecefefc059eb489dc7f8ee8
           </View>
         </ScrollView>
 

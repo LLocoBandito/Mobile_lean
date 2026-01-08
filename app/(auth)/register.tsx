@@ -1,9 +1,14 @@
 import { Ionicons } from "@expo/vector-icons"; // PERBAIKAN: Tambahkan impor Ionicons
 import { useRouter } from "expo-router";
 import React, { useState } from "react";
+<<<<<<< HEAD
 // PERBAIKAN: Tambahkan StyleSheet, KeyboardAvoidingView, dan Platform ke dalam impor react-native
 import { Alert, KeyboardAvoidingView, Platform, StyleSheet, Text, TouchableOpacity, View } from "react-native";
 import AuthButton from "../../components/PrimaryButton";
+=======
+import { Alert, Text, TouchableOpacity, View } from "react-native";
+import PrimaryButton from "../../components/PrimaryButton";
+>>>>>>> f94758a96585b86faecefefc059eb489dc7f8ee8
 import AuthInput from "../../components/inputfield";
 import { handleRegister } from "../../utils/login_handler";
 
@@ -16,7 +21,11 @@ export default function RegisterScreen() {
   const [loading, setLoading] = useState(false);
 
   const registrationHandler = async () => {
+<<<<<<< HEAD
     if (!email || !password || !name) {
+=======
+    if (!name || !email || !password) {
+>>>>>>> f94758a96585b86faecefefc059eb489dc7f8ee8
       Alert.alert("Error", "Semua kolom harus diisi.");
       return;
     }
@@ -27,38 +36,103 @@ export default function RegisterScreen() {
       await handleRegister(email, password, name);
 
       Alert.alert(
-        "Success",
-        "Akun berhasil didaftarkan! Anda akan diarahkan ke login."
+        "Berhasil 🎉",
+        "Akun berhasil dibuat. Silakan cek email untuk verifikasi sebelum login."
       );
+<<<<<<< HEAD
       router.replace("/(auth)/login"); // Pastikan path benar sesuai struktur expo-router
+=======
+
+      router.replace("/(auth)/login");
+>>>>>>> f94758a96585b86faecefefc059eb489dc7f8ee8
     } catch (error: any) {
-      let errorMessage = "Pendaftaran gagal. Silakan coba lagi.";
+      let message = "Pendaftaran gagal.";
 
       if (error.code === "auth/email-already-in-use") {
+<<<<<<< HEAD
         errorMessage = "Email sudah terdaftar.";
       } else if (error.code === "auth/weak-password") {
         errorMessage = "Password terlalu lemah. Minimal 6 karakter.";
+=======
+        message = "Email sudah terdaftar.";
+      } else if (error.code === "auth/weak-password") {
+        message = "Password minimal 6 karakter.";
+      } else if (error.message) {
+        message = error.message;
+>>>>>>> f94758a96585b86faecefefc059eb489dc7f8ee8
       }
 
-      Alert.alert("Pendaftaran Gagal", errorMessage);
+      Alert.alert("Gagal", message);
     } finally {
       setLoading(false);
     }
   };
 
   return (
+<<<<<<< HEAD
     <KeyboardAvoidingView
       behavior={Platform.OS === "ios" ? "padding" : undefined}
       style={styles.container}
+=======
+    <View
+      style={{
+        flex: 1,
+        justifyContent: "center",
+        padding: 24,
+        backgroundColor: "#0F172A",
+      }}
+>>>>>>> f94758a96585b86faecefefc059eb489dc7f8ee8
     >
       <View style={styles.card}>
         <View style={styles.iconBox}>
           <Ionicons name="person-add-outline" size={46} color="#fff" />
         </View>
 
+<<<<<<< HEAD
         <Text style={styles.title}>Create Account ✨</Text>
         <Text style={styles.subtitle}>
           Daftar untuk memulai pengalamanmu!
+=======
+      <AuthInput
+        label="Full Name"
+        placeholder="Your name"
+        value={name}
+        onChangeText={setName}
+      />
+
+      <AuthInput
+        label="Email"
+        placeholder="Your email"
+        keyboardType="email-address"
+        value={email}
+        onChangeText={setEmail}
+      />
+
+      <AuthInput
+        label="Password"
+        placeholder="Create password"
+        secureTextEntry
+        value={password}
+        onChangeText={setPassword}
+      />
+
+      <PrimaryButton
+        text={loading ? "Mendaftar..." : "Sign Up"}
+        onPress={registrationHandler}
+        loading={loading}
+      />
+
+      <TouchableOpacity onPress={() => router.push("/(auth)/login")}>
+        <Text
+          style={{
+            textAlign: "center",
+            marginTop: 20,
+            color: "#CBD5E1",
+          }}
+        >
+          Already have an account?{" "}
+          <Text style={{ color: "#3B82F6", fontWeight: "bold" }}>Login</Text>
+>>>>>>> f94758a96585b86faecefefc059eb489dc7f8ee8
         </Text>
 
         <AuthInput
