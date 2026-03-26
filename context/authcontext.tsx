@@ -1,47 +1,107 @@
-import React, { createContext, ReactNode, useContext, useState } from "react";
+import React, {
+  createContext,
+  ReactNode,
+  useContext,
+  useEffect,
+  useState,
+} from "react";
+// 👉 sesuaikan import auth kamu
+// contoh Firebase:
+import { onAuthStateChanged, signOut } from "firebase/auth";
+import { auth } from "../utils/firebaseConfig";
 
-type AuthContextType = {
-  user: any;
-  loading: boolean;
-  login: (email: string, password: string) => void;
-  logout: () => void;
-  register: (email: string, password: string) => void;
+/**
+ * DATA USER
+ */
+export type UserProfile = {
+  uid: string;
+  email: string | null;
+  name?: string | null;
+  photoURL?: string | null;
+  phone?: string;
 };
 
-const AuthContext = createContext<AuthContextType>({
-  user: null,
-  loading: false,
-  login: () => {},
-  logout: () => {},
-  register: () => {},
-});
+/**
+ * CONTEXT TYPE
+ */
+type AuthContextType = {
+  user: UserProfile | null;
+  loading: boolean;
+  logout: () => Promise<void>;
+  updateProfile: (data: Partial<UserProfile>) => void;
+};
 
-export const useAuth = () => useContext(AuthContext);
+/**
+ * CONTEXT
+ */
+const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
+/**
+ * HOOK
+ */
+export const useAuth = () => {
+  const ctx = useContext(AuthContext);
+  if (!ctx) {
+    throw new Error("useAuth must be used inside AuthProvider");
+  }
+  return ctx;
+};
+
+/**
+ * PROVIDER
+ */
 export const AuthProvider = ({ children }: { children: ReactNode }) => {
-  const [user, setUser] = useState<any>(null);
-  const [loading, setLoading] = useState<boolean>(false);
+  const [user, setUser] = useState<UserProfile | null>(null);
+  const [loading, setLoading] = useState<boolean>(true);
 
-  const login = (email: string, password: string) => {
-    setLoading(true);
-    // Simulasi login UI (tanpa Firebase)
-    setTimeout(() => {
-      setUser({ email });
+  /**
+   * LISTEN AUTH STATE (Email & Google)
+   */
+  useEffect(() => {
+    const unsubscribe = onAuthStateChanged(auth, (firebaseUser) => {
+      if (firebaseUser) {
+        setUser({
+          uid: firebaseUser.uid,
+          email: firebaseUser.email,
+          name: firebaseUser.displayName,
+          photoURL: firebaseUser.photoURL,
+        });
+      } else {
+        setUser(null);
+      }
       setLoading(false);
-    }, 1000);
+    });
+
+    return unsubscribe;
+  }, []);
+
+  /**
+   * UPDATE DATA PROFILE (apply / editprofile)
+   */
+  const updateProfile = (data: Partial<UserProfile>) => {
+    setUser((prev) => {
+      if (!prev) return prev;
+      return { ...prev, ...data };
+    });
   };
 
-  const logout = () => {
+  /**
+   * LOGOUT
+   */
+  const logout = async () => {
+    await signOut(auth);
     setUser(null);
   };
 
-  const register = (email: string, password: string) => {
-    // Simulasi register (tanpa Firebase)
-    setUser({ email });
-  };
-
   return (
-    <AuthContext.Provider value={{ user, loading, login, logout, register }}>
+    <AuthContext.Provider
+      value={{
+        user,
+        loading,
+        logout,
+        updateProfile,
+      }}
+    >
       {children}
     </AuthContext.Provider>
   );

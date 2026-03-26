@@ -4,7 +4,7 @@ import * as Haptics from "expo-haptics";
 import * as Location from "expo-location";
 import * as ScreenOrientation from "expo-screen-orientation";
 import { Accelerometer } from "expo-sensors";
-import { addDoc, collection } from "firebase/firestore";
+import { addDoc, collection, doc, getDoc } from "firebase/firestore";
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import {
   Alert,
@@ -22,8 +22,32 @@ import Svg, { Path } from "react-native-svg";
 import { WebView } from "react-native-webview";
 
 import MonitoringCard from "../../components/MonitoringCard";
+import { BIKE_ROLL_LIMIT, DEFAULT_ROLL_LIMIT } from "../../utils/bikeConfig";
 import { auth, db } from "../../utils/firebaseConfig";
 
+const [bikeType, setBikeType] = useState<string | null>(null);
+const [rollLimit, setRollLimit] = useState<number>(35);
+useEffect(() => {
+  const fetchUserBikeType = async () => {
+    const user = auth.currentUser;
+    if (!user) return;
+
+    try {
+      const snap = await getDoc(doc(db, "users", user.uid));
+      if (snap.exists()) {
+        const type = snap.data().bikeType;
+        setBikeType(type);
+
+        const limit = BIKE_ROLL_LIMIT[type] ?? DEFAULT_ROLL_LIMIT;
+        setRollLimit(limit);
+      }
+    } catch (e) {
+      console.warn("Gagal ambil tipe motor:", e);
+    }
+  };
+
+  fetchUserBikeType();
+}, []);
 const { width: SCREEN_WIDTH } = Dimensions.get("window");
 const getLeafletHtml = (points: LocationPoint[]) => {
   const lastPoint =
@@ -68,8 +92,7 @@ const getLeafletHtml = (points: LocationPoint[]) => {
 };
 // --- KONSTANTA ---
 const MAX_ROLL_ANGLE = 50;
-const DANGER_SPEED_THRESHOLD = 120; // km/h
-const DANGER_ROLL_THRESHOLD = 35; // degrees
+const DANGER_SPEED_THRESHOLD = 120;
 
 // --- INTERFACE ---
 interface LocationPoint {
@@ -238,17 +261,11 @@ export default function Home() {
 
   // === LOGIKA BEEP KOMBINASI ===
 
-  /* Logika: Beep harus dimainkan jika salah satu dari:
-     1. Kecepatan > DANGER_SPEED_THRESHOLD
-     2. Roll (kemiringan absolut) > DANGER_ROLL_THRESHOLD
-   */
-  // const isDangerActive = // Dihapus karena tidak digunakan langsung, logikanya ada di useEffect
-
   useEffect(() => {
     // State isBeeping akan menjadi true jika salah satu kondisi bahaya terpenuhi
     const newIsBeepingState =
       currentSpeed > DANGER_SPEED_THRESHOLD ||
-      Math.abs(displayRoll) > DANGER_ROLL_THRESHOLD;
+      Math.abs(displayRoll) > rollLimit;
 
     // Jika monitoring aktif (status === "Connected")
     if (status === "Connected") {
@@ -257,8 +274,7 @@ export default function Home() {
         playBeepSound();
         // Hanya set state yang relevan untuk visualisasi/debug
         if (currentSpeed > DANGER_SPEED_THRESHOLD) setIsSpeedBeeping(true);
-        if (Math.abs(displayRoll) > DANGER_ROLL_THRESHOLD)
-          setIsRollBeeping(true);
+        if (Math.abs(displayRoll) > rollLimit) setIsRollBeeping(true);
 
         // Pemicu getaran hanya sekali saat masuk kondisi bahaya
         Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
@@ -277,12 +293,9 @@ export default function Home() {
           setIsSpeedBeeping(false);
         }
 
-        if (Math.abs(displayRoll) > DANGER_ROLL_THRESHOLD && !isRollBeeping) {
+        if (Math.abs(displayRoll) > rollLimit && !isRollBeeping) {
           setIsRollBeeping(true);
-        } else if (
-          Math.abs(displayRoll) <= DANGER_ROLL_THRESHOLD &&
-          isRollBeeping
-        ) {
+        } else if (Math.abs(displayRoll) <= rollLimit && isRollBeeping) {
           setIsRollBeeping(false);
         }
       }
@@ -621,7 +634,7 @@ export default function Home() {
   const getRollPathColor = () => {
     const absRoll = Math.abs(displayRoll);
     if (absRoll === 0) return colors.TEXT_SECONDARY;
-    if (absRoll > DANGER_ROLL_THRESHOLD) return colors.ACCENT_DANGER;
+    if (absRoll > rollLimit) return colors.ACCENT_DANGER;
     return colors.ACCENT_SAFE;
   };
 
@@ -915,7 +928,7 @@ export default function Home() {
                     styles.bike,
                     {
                       backgroundColor:
-                        Math.abs(displayRoll) > DANGER_ROLL_THRESHOLD
+                        Math.abs(displayRoll) > rollLimit
                           ? colors.ACCENT_DANGER
                           : colors.TEXT_PRIMARY,
                     },

@@ -21,7 +21,19 @@ import { db } from "../utils/firebaseConfig";
 import PrimaryButton from "../components/PrimaryButton";
 import SecondaryButton from "../components/SecondaryButton";
 
-// Input Component
+/* ================= BIKE TYPE OPTIONS ================= */
+const BIKE_TYPES = [
+  "Trail",
+  "Big Scooter",
+  "Scooter",
+  "Supersport",
+  "Sport Touring",
+  "Touring",
+  "Cruiser",
+  "Commuter",
+];
+
+/* ================= INPUT COMPONENT ================= */
 const CustomInput = ({
   label,
   value,
@@ -64,6 +76,7 @@ const CustomInput = ({
   </View>
 );
 
+/* ================= MAIN SCREEN ================= */
 export default function EditProfileScreen() {
   const router = useRouter();
   const auth = getAuth();
@@ -84,18 +97,16 @@ export default function EditProfileScreen() {
     const fetchProfile = async () => {
       if (!userId) return;
       try {
-        const docRef = doc(db, "users", userId);
-        const snapshot = await getDoc(docRef);
+        const snapshot = await getDoc(doc(db, "users", userId));
         if (snapshot.exists()) {
           setFormData((prev) => ({ ...prev, ...snapshot.data() }));
         }
-      } catch (error) {
+      } catch {
         Alert.alert("Error", "Gagal memuat data profil.");
       } finally {
         setLoading(false);
       }
     };
-
     fetchProfile();
   }, [userId]);
 
@@ -105,32 +116,22 @@ export default function EditProfileScreen() {
 
   const handleSave = async () => {
     if (!userId) return;
+    if (!formData.bikeType) {
+      Alert.alert("Validasi", "Silakan pilih tipe motor.");
+      return;
+    }
+
     setSaving(true);
     try {
       await setDoc(doc(db, "users", userId), formData, { merge: true });
       Alert.alert("Berhasil", "Profil berhasil diperbarui!", [
         { text: "OK", onPress: () => router.back() },
       ]);
-    } catch (error) {
+    } catch {
       Alert.alert("Error", "Gagal menyimpan perubahan.");
     } finally {
       setSaving(false);
     }
-  };
-
-  const handleCancel = () => {
-    Alert.alert(
-      "Batalkan Edit?",
-      "Perubahan yang belum disimpan akan hilang.",
-      [
-        { text: "Lanjut Mengedit", style: "cancel" },
-        {
-          text: "Ya, keluar",
-          onPress: () => router.back(),
-          style: "destructive",
-        },
-      ]
-    );
   };
 
   if (loading) {
@@ -145,7 +146,7 @@ export default function EditProfileScreen() {
     <View style={styles.container}>
       <StatusBar barStyle="light-content" backgroundColor="#0F172A" />
 
-      {/* Header */}
+      {/* HEADER */}
       <View style={styles.header}>
         <TouchableOpacity
           onPress={() => router.back()}
@@ -181,17 +182,28 @@ export default function EditProfileScreen() {
             multiline
           />
 
-          <View style={styles.row}>
-            <View style={{ flex: 1, marginRight: 10 }}>
-              <CustomInput
-                label="Tipe Motor"
-                value={formData.bikeType}
-                onChangeText={(t) => handleChange("bikeType", t)}
-                icon="bicycle-outline"
-                placeholder="Vario"
-              />
-            </View>
+          {/* === BIKE TYPE SELECT === */}
+          <Text style={styles.label}>Tipe Motor</Text>
+          <View style={styles.chipContainer}>
+            {BIKE_TYPES.map((type) => {
+              const selected = formData.bikeType === type;
+              return (
+                <TouchableOpacity
+                  key={type}
+                  style={[styles.chip, selected && styles.chipActive]}
+                  onPress={() => handleChange("bikeType", type)}
+                >
+                  <Text
+                    style={[styles.chipText, selected && styles.chipTextActive]}
+                  >
+                    {type}
+                  </Text>
+                </TouchableOpacity>
+              );
+            })}
+          </View>
 
+          <View style={styles.row}>
             <View style={{ flex: 1 }}>
               <CustomInput
                 label="Gol. Darah"
@@ -206,6 +218,7 @@ export default function EditProfileScreen() {
           <Text style={[styles.sectionTitle, { marginTop: 10 }]}>
             Kontak Darurat
           </Text>
+
           <CustomInput
             label="Nomor Telepon"
             value={formData.emergencyPhone}
@@ -215,7 +228,6 @@ export default function EditProfileScreen() {
             keyboardType="phone-pad"
           />
 
-          {/* Reusable Buttons */}
           <View style={{ marginTop: 30, gap: 16 }}>
             <PrimaryButton
               text="Simpan Perubahan"
@@ -223,8 +235,7 @@ export default function EditProfileScreen() {
               loading={saving}
               icon="save-outline"
             />
-
-            <SecondaryButton title="Batal" onPress={handleCancel} />
+            <SecondaryButton title="Batal" onPress={() => router.back()} />
           </View>
         </ScrollView>
       </KeyboardAvoidingView>
@@ -232,6 +243,7 @@ export default function EditProfileScreen() {
   );
 }
 
+/* ================= STYLES ================= */
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: "#0F172A" },
   centerContent: { justifyContent: "center", alignItems: "center" },
@@ -244,7 +256,6 @@ const styles = StyleSheet.create({
     paddingTop: 60,
     paddingBottom: 20,
     paddingHorizontal: 20,
-    backgroundColor: "#0F172A",
     borderBottomWidth: 1,
     borderBottomColor: "#1E293B",
   },
@@ -253,11 +264,7 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     backgroundColor: "#1E293B",
   },
-  headerTitle: {
-    color: "#FFF",
-    fontSize: 20,
-    fontWeight: "700",
-  },
+  headerTitle: { color: "#FFF", fontSize: 20, fontWeight: "700" },
 
   sectionTitle: {
     color: "#94A3B8",
@@ -270,6 +277,7 @@ const styles = StyleSheet.create({
 
   inputGroup: { marginBottom: 20 },
   label: { color: "#E2E8F0", marginBottom: 8, fontSize: 14 },
+
   inputContainer: {
     flexDirection: "row",
     backgroundColor: "#1E293B",
@@ -288,5 +296,33 @@ const styles = StyleSheet.create({
   inputIcon: { marginRight: 12 },
   input: { flex: 1, color: "#FFF", fontSize: 16 },
   inputMulti: { textAlignVertical: "top" },
+
   row: { flexDirection: "row" },
+
+  chipContainer: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 10,
+    marginBottom: 20,
+  },
+  chip: {
+    paddingVertical: 10,
+    paddingHorizontal: 14,
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: "#334155",
+    backgroundColor: "#1E293B",
+  },
+  chipActive: {
+    backgroundColor: "#3B82F6",
+    borderColor: "#3B82F6",
+  },
+  chipText: {
+    color: "#94A3B8",
+    fontSize: 14,
+    fontWeight: "600",
+  },
+  chipTextActive: {
+    color: "#0F172A",
+  },
 });

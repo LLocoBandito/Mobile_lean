@@ -7,20 +7,22 @@ function RootNavigator() {
   const { user, loading } = useAuth();
 
   useEffect(() => {
-    let timer: ReturnType<typeof setTimeout>;
+    if (loading) return;
 
-    if (!loading) {
-      timer = setTimeout(() => {
-        if (user) {
-          // ✅ tidak perlu (tabs) di path
-          router.replace("/(tabs)");
-        } else {
-          router.replace("/(auth)/login");
-        }
-      }, 300);
+    // ❌ Belum login
+    if (!user) {
+      router.replace("/(auth)/login");
+      return;
     }
 
-    return () => clearTimeout(timer);
+    // ⚠️ Login tapi belum isi profile
+    if (!user.name || !user.phone) {
+      router.replace("/(form)/apply");
+      return;
+    }
+
+    // ✅ Login & profile lengkap
+    router.replace("/(tabs)");
   }, [user, loading]);
 
   if (loading) {
@@ -38,14 +40,12 @@ function RootNavigator() {
     );
   }
 
-  // ✅ Slot harus dirender untuk menjaga integrasi Expo Router
   return <Slot />;
 }
 
 export default function RootLayout() {
   return (
     <AuthProvider>
-      {/* Slot di sini tetap dibutuhkan supaya nested layout berfungsi */}
       <RootNavigator />
     </AuthProvider>
   );
